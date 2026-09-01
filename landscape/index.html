@@ -1,0 +1,715 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="从多重网格组件、学习型预条件器到在线调参：梳理这些方法怎样加速线性方程求解，以及公开版 Alioth 处在什么位置">
+  <title>Alioth 所在的学习增强线性求解器版图</title>
+  <style>
+    :root{--paper:#f4efe4;--paper-2:#e9e1d1;--ink:#17211f;--muted:#61706c;--teal:#0f6b5b;--rust:#b34b2d;--blue:#274e68;--line:#c9bda8;--white:#fffdf7;--shadow:0 16px 42px rgba(41,47,43,.12);}
+    *{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:var(--paper);color:var(--ink);font-family:"Noto Serif SC","Source Han Serif SC","Songti SC",Georgia,serif;line-height:1.72;}
+    body:before{content:"";position:fixed;inset:0;pointer-events:none;opacity:.34;background-image:linear-gradient(rgba(15,107,91,.045) 1px,transparent 1px),linear-gradient(90deg,rgba(15,107,91,.045) 1px,transparent 1px);background-size:28px 28px;}
+    a{color:var(--teal);text-underline-offset:3px}a:focus-visible,button:focus-visible,input:focus-visible,summary:focus-visible{outline:3px solid #e1a428;outline-offset:3px}.skip-link{position:fixed;left:12px;top:-80px;z-index:100;background:#fff;padding:10px 14px}.skip-link:focus{top:12px}
+    .masthead{min-height:78vh;display:grid;grid-template-columns:minmax(0,1.2fr) minmax(260px,.8fr);align-items:end;gap:5vw;padding:9vh clamp(24px,7vw,110px);background:#122e2a;color:#f7f0df;position:relative;overflow:hidden}
+    .masthead:after{content:"";position:absolute;width:65vw;height:65vw;border:1px solid rgba(255,255,255,.12);border-radius:50%;right:-28vw;top:-30vw;box-shadow:0 0 0 8vw rgba(255,255,255,.025),0 0 0 16vw rgba(255,255,255,.018)}
+    .kicker,.eyebrow{font:700 12px/1.2 ui-monospace,Consolas,monospace;letter-spacing:.18em;text-transform:uppercase}
+    h1{font-size:clamp(48px,8vw,112px);line-height:.9;margin:.18em 0 .22em;letter-spacing:-.055em;font-weight:700;max-width:9ch}
+    .masthead .lead{font-size:clamp(18px,2.2vw,28px);max-width:32em;color:#d7e5dc}
+    .coordinates{border-left:1px solid rgba(255,255,255,.3);padding-left:28px;position:relative;z-index:1}.coordinates strong{display:block;font-size:clamp(56px,8vw,96px);line-height:1;color:#f0b35b}.coordinates span{display:block;margin-top:8px;color:#c7d8d0}
+    .atlas-nav{position:sticky;top:0;z-index:20;background:rgba(244,239,228,.94);backdrop-filter:blur(12px);border-bottom:1px solid var(--line);display:flex;gap:18px;overflow:auto;padding:12px clamp(18px,6vw,90px);font:600 12px/1.2 ui-monospace,Consolas,monospace;white-space:nowrap;scrollbar-width:none}.atlas-nav::-webkit-scrollbar{display:none}.atlas-nav a{color:var(--ink);text-decoration:none}
+    main{position:relative}.section{padding:90px clamp(20px,6vw,92px);border-bottom:1px solid var(--line)}.section:nth-child(even){background:rgba(255,253,247,.58)}
+    .section-head{display:grid;grid-template-columns:110px minmax(0,1fr);gap:30px;max-width:1240px;margin:0 auto 42px}.section-no{font:700 54px/1 ui-monospace,Consolas,monospace;color:var(--rust)}.section h2{font-size:clamp(32px,4vw,58px);line-height:1.08;margin:0 0 12px;letter-spacing:-.035em}.section-head p{max-width:760px;color:var(--muted);margin:0}
+    .content{max-width:1240px;margin:0 auto}.profile-grid,.paradigm-grid,.direction-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px}.profile-card,.paradigm-card,.direction,.claim{background:var(--white);border:1px solid var(--line);padding:26px;box-shadow:var(--shadow)}
+    .profile-card h3,.paradigm-card h3,.direction h3{font-size:24px;margin:0 0 10px}.profile-card.wide{grid-column:1/-1}.flow{font:700 16px/1.7 ui-monospace,Consolas,monospace;color:var(--blue)}
+    .evidence-key{display:flex;gap:10px;flex-wrap:wrap;margin:28px 0}.evidence-key span,.claim>span{font:700 11px/1 ui-monospace,Consolas,monospace;text-transform:uppercase;padding:8px 10px;border-radius:999px}
+    [data-evidence="fact"]>span,.evidence-key .fact{background:#cce4da;color:#064c40}[data-evidence="interpretation"]>span,.evidence-key .interpretation{background:#d8e4ed;color:#173f58}[data-evidence="hypothesis"]>span,.evidence-key .hypothesis{background:#f1d8cb;color:#7c2d18}
+    .claim-stack{display:grid;gap:12px}.claim{display:grid;grid-template-columns:110px 1fr;gap:8px 18px;align-items:start;box-shadow:none}.claim p{margin:0}.claim small{grid-column:2;color:var(--muted)}.claim-sources{display:block;margin-top:8px}.source-chip{display:inline-block;margin:2px 5px 2px 0;padding:3px 7px;border:1px solid currentColor;border-radius:999px;font:700 10px ui-monospace,Consolas,monospace;text-decoration:none}
+    .artifact-wrap{overflow:auto;border:1px solid var(--line);background:var(--white)}table{border-collapse:collapse;width:100%;min-width:980px;font-size:14px}th,td{padding:14px;text-align:left;vertical-align:top;border-bottom:1px solid var(--paper-2)}th{background:#1d3d37;color:white;position:sticky;top:0}
+    .problem-solution-map{display:grid;gap:22px}.landscape-row{background:var(--white);border:1px solid var(--line);box-shadow:var(--shadow);overflow:hidden}.landscape-head{display:grid;grid-template-columns:72px 1fr;gap:20px;background:#173d37;color:#f7f1e4;padding:24px}.landscape-head>span{font:700 40px/1 ui-monospace,Consolas,monospace;color:#f0b35b}.landscape-head h3{font-size:28px;line-height:1.2;margin:0 0 6px}.landscape-head p{margin:0;color:#d7e5dc}.approach-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(260px,100%),1fr));gap:1px;background:var(--line)}.approach-card{background:#fffdf7;padding:22px}.approach-card h4{font-size:19px;line-height:1.35;margin:0 0 8px}.approach-card p{margin:0 0 14px;color:var(--muted)}.approach-evidence{display:flex;flex-wrap:wrap;align-items:center;gap:3px}.paradigm-pill,.problem-pill{display:inline-block;background:#dbe8e2;color:#0a5749;padding:3px 7px;margin:2px 4px 2px 0;border-radius:999px;font:700 10px ui-monospace,Consolas,monospace}.landscape-notes{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--line);border-top:1px solid var(--line)}.landscape-notes p{background:#f3eee2;margin:0;padding:20px}.landscape-notes p:last-child{background:#e4eadf}.landscape-notes b,.portfolio-card b{display:block;color:var(--rust);font:700 11px/1.2 ui-monospace,Consolas,monospace;text-transform:uppercase;letter-spacing:.06em;margin-bottom:7px}
+    .timeline{position:relative;max-width:980px;margin:auto}.timeline:before{content:"";position:absolute;left:104px;top:0;bottom:0;width:2px;background:var(--teal)}.phase{display:grid;grid-template-columns:86px 1fr;gap:42px;margin:0 0 34px;position:relative}.phase:before{content:"";position:absolute;left:98px;top:10px;width:14px;height:14px;background:var(--paper);border:3px solid var(--rust);border-radius:50%}.phase-year{font:700 14px/1.2 ui-monospace,Consolas,monospace;color:var(--teal);text-align:right}.phase h3{font-size:26px;margin:0}.phase p{margin:6px 0}.phase-note{color:var(--muted)}
+    .evolution-list{list-style:none;padding:0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}.evolution-list li{background:var(--white);padding:22px;border-left:5px solid var(--teal)}.edge-kind{font:700 11px ui-monospace,Consolas,monospace;color:var(--rust);text-transform:uppercase;display:block;margin-bottom:6px}.evolution-list p{margin-bottom:0;color:var(--muted)}
+    .filters{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:0 0 22px}button{appearance:none;border:1px solid var(--ink);background:transparent;padding:9px 14px;font:700 12px ui-monospace,Consolas,monospace;cursor:pointer}button.active,button:hover{background:var(--ink);color:var(--paper)}#paper-search{min-width:min(340px,100%);padding:10px 12px;border:1px solid var(--line);background:var(--white)}#paper-count{margin-left:auto;font:700 12px ui-monospace,Consolas,monospace;color:var(--teal)}
+    .paper-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}.paper-card{background:var(--white);border:1px solid var(--line);padding:24px;transition:opacity .2s ease,transform .2s ease}.paper-card[hidden]{display:none}.paper-topline{display:flex;justify-content:space-between;gap:12px;color:var(--muted);font:700 11px ui-monospace,Consolas,monospace}.paper-id{color:var(--rust)}.paper-card h3{font-size:21px;line-height:1.3;margin:12px 0}.paper-card h3 a{color:var(--ink)}.paper-card p{font-size:14px}.relation{background:var(--paper);padding:12px}.pill,.mini-pill{display:inline-block;border:1px solid var(--line);padding:4px 8px;margin:2px 5px 2px 0;font:700 10px ui-monospace,Consolas,monospace;border-radius:999px}.mini-pill{background:var(--paper)}details{border-top:1px solid var(--line);padding-top:12px}summary{cursor:pointer;font-weight:700;color:var(--teal)}dl{display:grid;grid-template-columns:100px 1fr;gap:8px 14px;font-size:13px}dt{font-weight:700;color:var(--rust)}dd{margin:0}
+    .class-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(340px,100%),1fr));gap:16px}.class-column{background:var(--white);border-top:6px solid var(--teal);padding:22px}.class-column h3{margin-top:0}.class-column li{margin-bottom:18px}.class-column li>span{display:block;margin:5px 0 9px;color:var(--muted)}.class-papers{display:flex;flex-wrap:wrap;gap:5px}.project-chip{display:inline-block;border:1px solid var(--rust);color:var(--rust);padding:2px 7px;font:700 10px ui-monospace,Consolas,monospace}
+    .open-list,.source-list,.exclusion-list{list-style:none;padding:0;display:grid;gap:10px}.open-list li,.source-list li,.exclusion-list li{display:grid;grid-template-columns:minmax(220px,.65fr) 1fr;gap:18px;border-bottom:1px solid var(--line);padding:14px 0}.source-list span,.exclusion-list span,.open-list span{color:var(--muted)}
+    .portfolio-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px;align-items:start}.portfolio-group{border-top:8px solid var(--teal);background:rgba(255,253,247,.46);padding:18px;display:grid;gap:12px}.portfolio-group[data-project-fit="worth-trying"]{border-color:#c08b22}.portfolio-group[data-project-fit="not-fit"]{border-color:var(--rust)}.portfolio-group>h3{font-size:24px;margin:0 0 4px}.portfolio-card{background:var(--white);border:1px solid var(--line);padding:20px}.portfolio-card h4{font-size:19px;line-height:1.35;margin:10px 0}.portfolio-card p{font-size:14px;margin:8px 0}.portfolio-meta{display:flex;flex-wrap:wrap;align-items:center;gap:4px;color:var(--muted);font:700 10px ui-monospace,Consolas,monospace}.next-step{border-top:1px solid var(--line);padding-top:12px}
+    .position-map{display:grid;grid-template-columns:repeat(5,1fr);gap:2px;background:var(--line)}.position-step{background:var(--white);padding:20px;min-height:190px}.position-step span{font:700 11px ui-monospace,Consolas,monospace;color:var(--rust)}.verdict{margin-top:24px;background:#122e2a;color:#f7f0df;padding:30px;font-size:20px}.verdict b{color:#f0b35b}
+    .method-grid{display:grid;grid-template-columns:1fr 1fr;gap:28px}.method-grid h3{font-size:24px}footer{padding:44px clamp(20px,6vw,92px);background:#122e2a;color:#d3dfd9;display:flex;justify-content:space-between;gap:20px}.deerflow{color:#d3dfd9;opacity:.65;font:11px ui-monospace,Consolas,monospace;text-decoration:none}
+    @media(max-width:900px){.masthead{grid-template-columns:1fr;min-height:70vh}.coordinates{border-left:0;border-top:1px solid rgba(255,255,255,.3);padding:20px 0 0}.section-head{grid-template-columns:1fr;gap:8px}.section-no{font-size:26px}.class-grid{grid-template-columns:1fr 1fr}.position-map{grid-template-columns:1fr 1fr}.portfolio-grid{grid-template-columns:1fr}}
+    @media(max-width:640px){.section{padding:62px 18px}.profile-grid,.paper-grid,.class-grid,.evolution-list,.method-grid{grid-template-columns:1fr}.claim{grid-template-columns:1fr}.claim small{grid-column:1}.trade-grid,.landscape-notes{grid-template-columns:1fr}.landscape-head{grid-template-columns:1fr;gap:8px}.landscape-head>span{font-size:24px}.timeline:before{left:12px}.phase{grid-template-columns:1fr;padding-left:38px}.phase:before{left:6px}.phase-year{text-align:left}.position-map{grid-template-columns:1fr}.open-list li,.source-list li,.exclusion-list li{grid-template-columns:1fr;gap:4px}footer{display:block}#paper-count{width:100%;margin:0}}
+    @media print{.atlas-nav,.filters,.skip-link{display:none!important}.masthead{min-height:auto;padding:36px;background:#fff;color:#000}.masthead .lead,.coordinates span{color:#333}.section{padding:32px 0}.paper-card,.profile-card,.paradigm-card,.direction,.claim{box-shadow:none;break-inside:avoid}details>summary{display:none}details:not([open])>*:not(summary){display:block}a{color:#000}}
+    @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}*,*:before,*:after{animation-duration:.01ms!important;transition-duration:.01ms!important}}
+  </style>
+</head>
+<body>
+  <a class="skip-link" href="#main-content">跳到主要内容</a>
+  <header class="masthead"><div><div class="kicker">Research Cartographer · Field Atlas</div><h1>Alioth 所在的学习增强线性求解器版图</h1><p class="lead">从多重网格组件、学习型预条件器到在线调参：梳理这些方法怎样加速线性方程求解，以及公开版 Alioth 处在什么位置</p></div><div class="coordinates"><strong>25</strong><span>24 篇正式出版 + 1 篇已在线发表</span><span>2026-08-31 · 项目内孵化第三版；问题与解法已合并；方向按项目匹配度分组；25篇核心论文；未独立复现实验</span></div></header>
+  <nav class="atlas-nav" aria-label="研究版图导航"><a href="#project-profile">项目原点</a><a href="#problem-solution-map">问题与解法</a><a href="#research-timeline">时间线</a><a href="#research-evolution">思想演化</a><a href="#classification">分类</a><a href="#literature-corpus">论文语料</a><a href="#project-directions">项目方向</a><a href="#project-positioning">项目坐标</a><a href="#method-limitations">方法与限制</a></nav>
+  <main id="main-content">
+    <section class="section" id="project-profile"><div class="section-head"><div class="section-no">00</div><div><div class="eyebrow">Project Research Profile</div><h2>先校准原点，再绘制地图</h2><p>版本化证据按“已实现、作者报告、外部验证”分层；冲突材料不静默合并。</p></div></div><div class="content">
+      <div class="profile-grid"><article class="profile-card"><h3>表面任务</h3><p>面对新的大型稀疏线性系统，自动生成一套适合 GPU（图形处理器）的求解配置，并把误差降到工程计算要求的范围内。</p></article><article class="profile-card"><h3>技术问题</h3><p>传统多重网格方法需要专家决定网格层级、层间传递方式、平滑器和许多参数。效果好的顺序算法不容易在 GPU 上并行；容易并行的固定规则又可能在新矩阵上失效。</p></article><article class="profile-card wide"><h3>当前通常怎么解决</h3><p>主流路线要么手工选择 algebraic multigrid (AMG)（代数多重网格）、不完全分解或近似逆等预条件器，要么让神经网络直接学习近似解。前者稳健但依赖问题和人工调参，后者推理快但高精度、跨来源泛化和失败处置仍较困难。</p></article><article class="profile-card wide"><h3>更底层的研究问题</h3><p>如何从矩阵本身生成可迁移、可并行、低开销的数值求解组件，同时把高精度正确性和失败处置保留在可验证的经典迭代框架中。</p></article><article class="profile-card wide"><h3>问题 → 核心想法 → 实现方式 → 结果</h3><p class="flow">新矩阵很难人工调参 → 一个约1,500参数的小网络读取每一行矩阵的局部特征 → 网络为多重网格的每一层生成平滑系数 → flexible conjugate gradient (FCG)（灵活共轭梯度法）继续把 residual（残差，即当前答案代回方程后还差多少）压到目标范围；如果学习配置没有达到要求，则尝试传统 Jacobi 配置。性能提升目前仍是作者报告。</p></article><article class="profile-card"><h3>公开实现</h3><p>公开代码包含8个逐行特征、约1,500参数的 RowNet、每行每层4个多项式系数、PyAMG 多重网格层级、块结构识别、FCG 迭代和 Jacobi 备用配置。</p></article><article class="profile-card"><h3>作者报告但尚未独立核验</h3><p>README 和博客报告了 116 个 symmetric positive definite (SPD)（对称正定）矩阵上的通过率，以及 OpenFOAM 流体压力问题上的性能；这些数字目前仍需要独立复现。</p></article></div>
+      <div class="evidence-key"><span class="fact">Fact 事实</span><span class="interpretation">Interpretation 归纳</span><span class="hypothesis">Hypothesis 假设</span></div><div class="claim-stack">
+      <article class="claim" data-evidence="fact"><span>事实</span>
+      <p>公开代码实现了 RowNet 逐行生成多项式平滑系数、PyAMG 多重网格层级、FCG 迭代和 Jacobi 备用配置。<span class="claim-sources"><a class="source-chip" href="https://github.com/Tarpelite/alioth" target="_blank" rel="noreferrer">S02</a><a class="source-chip" href="https://github.com/Tarpelite/alioth/blob/main/alioth/solver.py" target="_blank" rel="noreferrer">S03</a></span></p><small>只说明所检查的代码版本中存在这些模块，不证明性能优势，也不说明它们在新矩阵上的成功率。</small></article>
+      <article class="claim" data-evidence="interpretation"><span>归纳</span>
+      <p>25篇核心论文可以归纳为五种主要做法。它们最重要的区别是：神经网络具体学习什么、在求解过程中调用几次，以及最后的精度由神经网络还是经典算法负责。另有一类组合思路，让神经网络和传统迭代分别处理不同误差；还需要用不用机器学习的 GPU 方法判断学习是否真的必要。<span class="claim-sources"><a class="source-chip" href="https://proceedings.mlr.press/v97/greenfeld19a.html" target="_blank" rel="noreferrer">S04</a><a class="source-chip" href="https://proceedings.mlr.press/v119/luz20a.html" target="_blank" rel="noreferrer">S06</a><a class="source-chip" href="https://epubs.siam.org/doi/10.1137/21M1430030" target="_blank" rel="noreferrer">S10</a><a class="source-chip" href="https://proceedings.mlr.press/v202/li23e.html" target="_blank" rel="noreferrer">S12</a><a class="source-chip" href="https://proceedings.mlr.press/v235/rudikov24a.html" target="_blank" rel="noreferrer">S17</a><a class="source-chip" href="https://proceedings.iclr.cc/paper_files/paper/2024/hash/8fcc228e94aa7e4773a27c6c2d886243-Abstract-Conference.html" target="_blank" rel="noreferrer">S18</a><a class="source-chip" href="https://www.nature.com/articles/s42256-024-00910-x" target="_blank" rel="noreferrer">S21</a><a class="source-chip" href="https://proceedings.neurips.cc/paper_files/paper/2025/hash/23fcc63005ac1a6e460ec4e209d17607-Abstract-Conference.html" target="_blank" rel="noreferrer">S25</a></span></p><small>这是本版图的综合分类，不是任何单篇论文的原始结论。</small></article>
+      <article class="claim" data-evidence="hypothesis"><span>推测</span>
+      <p>把便宜的逐行无量纲特征与少量整体矩阵难度信息结合起来，可能比深层图网络更适合跨来源矩阵，因为它兼顾了局部细节和较低的求解前成本。<span class="claim-sources"><a class="source-chip" href="https://github.com/Tarpelite/alioth/blob/main/alioth/solver.py" target="_blank" rel="noreferrer">S03</a><a class="source-chip" href="https://proceedings.mlr.press/v119/luz20a.html" target="_blank" rel="noreferrer">S06</a><a class="source-chip" href="https://proceedings.iclr.cc/paper_files/paper/2025/hash/3bb7e33e4da1fd19ebc6f0899e45a9dc-Abstract-Conference.html" target="_blank" rel="noreferrer">S22</a><a class="source-chip" href="https://proceedings.neurips.cc/paper_files/paper/2025/hash/23fcc63005ac1a6e460ec4e209d17607-Abstract-Conference.html" target="_blank" rel="noreferrer">S25</a></span></p><small>核心论文尚未直接验证这一组合；需要在严格隔离的陌生矩阵上测试，并计算完整运行时间。</small></article>
+      <article class="claim" data-evidence="fact"><span>事实</span>
+      <p>Alioth README 和博客给出的通过率与速度是作者报告，目前没有独立复现，也没有可让他人逐个案例重跑的公开测试脚本。<span class="claim-sources"><a class="source-chip" href="https://www.tianyuc.com/blog/alioth" target="_blank" rel="noreferrer">S01</a><a class="source-chip" href="https://github.com/Tarpelite/alioth" target="_blank" rel="noreferrer">S02</a></span></p><small>因此页面不把65%通过率、2.27倍迭代减少或17ms视为独立事实。</small></article></div>
+      <h3>项目材料与证据边界</h3><div class="artifact-wrap"><table><caption>每份项目材料能说明什么、不能说明什么</caption><thead><tr><th scope="col">ID</th><th scope="col">类型</th><th scope="col">材料</th><th scope="col">版本</th><th scope="col">能够支持</th><th scope="col">不能支持</th></tr></thead><tbody>
+      <tr><td>A1</td><td>项目博客</td><td><a href="https://www.tianyuc.com/blog/alioth" target="_blank" rel="noreferrer">智算玉衡（Alioth）：让 AI 生成方程求解器</a></td><td>页面标注 2026-08；2026-08-31 访问</td><td>项目愿景、完整系统叙述、作者报告的测试结果、自适应与服务路线</td><td>独立复现、未公开的训练细节与自适应实现</td></tr>
+      <tr><td>A2</td><td>官方代码仓库</td><td><a href="https://github.com/Tarpelite/alioth" target="_blank" rel="noreferrer">Tarpelite/alioth</a></td><td>main@ccd380f，2026-08-09</td><td>公开 v0 推理核心、接口、权重、README 指标与代码范围</td><td>训练过程和公开测试是否采用了完全公平的比较条件</td></tr>
+      <tr><td>A3</td><td>具体实现</td><td><a href="https://github.com/Tarpelite/alioth/blob/main/alioth/solver.py" target="_blank" rel="noreferrer">Alioth solver.py</a></td><td>main@ccd380f，2026-08-09</td><td>特征、网络、AMG 层级、FCG、回退和回执的具体控制流</td><td>性能因果、训练分布、116矩阵筛选与基线预算</td></tr></tbody></table></div>
+    </div></section>
+    <section class="section" id="problem-solution-map"><span id="core-problem-map"></span><span id="solution-landscape"></span><span id="open-problems"></span><div class="section-head"><div class="section-no">01</div><div><div class="eyebrow">Problem × Solution Map</div><h2>核心问题、已有思路与尚存不足</h2><p>每一行从问题出发，把已经出现的思路、代表论文、共同不足和 Alioth 的关系放在一起；这样可以直接看出哪些问题已有多条路线，哪些位置仍然空缺。</p></div></div><div class="content problem-solution-map"><article class="landscape-row" id="problem-Q1"><header class="landscape-head"><span>Q1</span><div><h3>怎样自动设计适合当前矩阵的求解器</h3><p>层间传递、粗层选择、平滑方式和预条件矩阵都依赖具体问题，固定规则很难覆盖不断出现的新矩阵。</p></div></header><div class="approach-list"><article class="approach-card"><h4>只学习多重网格或域分解中的关键组件</h4><p>保留成熟求解骨架，只让模型生成层间传递、粗化、平滑器、接口或粗层算子。</p><div class="approach-evidence"><span class="paradigm-pill">R1</span><a class="mini-pill" href="#paper-P01">P01</a><a class="mini-pill" href="#paper-P03">P03</a><a class="mini-pill" href="#paper-P04">P04</a><a class="mini-pill" href="#paper-P05">P05</a><a class="mini-pill" href="#paper-P06">P06</a><a class="mini-pill" href="#paper-P07">P07</a><a class="mini-pill" href="#paper-P11">P11</a><a class="mini-pill" href="#paper-P17">P17</a></div></article><article class="approach-card"><h4>直接生成预条件矩阵</h4><p>模型输出分解因子或稀疏近似逆，再交给经典迭代算法使用。</p><div class="approach-evidence"><span class="paradigm-pill">R2</span><a class="mini-pill" href="#paper-P09">P09</a><a class="mini-pill" href="#paper-P12">P12</a><a class="mini-pill" href="#paper-P22">P22</a><a class="mini-pill" href="#paper-P23">P23</a></div></article><article class="approach-card"><h4>在运行中从传统配置里选择</h4><p>不创造新组件，而是根据实际求解反馈选择参数或预条件器。</p><div class="approach-evidence"><span class="paradigm-pill">R5</span><a class="mini-pill" href="#paper-P15">P15</a><a class="mini-pill" href="#paper-P25">P25</a></div></article></div><div class="landscape-notes"><p><b>现有思路还缺什么</b>多数工作一次只学习一个组件，难以处理组件之间互相影响的问题；模型越复杂，训练和求解前准备也越贵。</p><p><b>与 Alioth 的关系</b>Alioth 已在做第一类：小网络按矩阵行生成多项式平滑系数，完整多重网格和经典迭代仍然保留。</p></div></article><article class="landscape-row" id="problem-Q2"><header class="landscape-head"><span>Q2</span><div><h3>换一种规模、方程或工业矩阵后还能不能用</h3><p>如果每遇到一个新矩阵都要重新训练，训练时间可能超过求解节省的时间。</p></div></header><div class="approach-list"><article class="approach-card"><h4>用局部、尺寸无关的表示生成组件</h4><p>图消息、局部卷积或逐行特征可以直接应用到更大的稀疏矩阵。</p><div class="approach-evidence"><span class="paradigm-pill">R1</span><span class="paradigm-pill">R2</span><a class="mini-pill" href="#paper-P03">P03</a><a class="mini-pill" href="#paper-P06">P06</a><a class="mini-pill" href="#paper-P07">P07</a><a class="mini-pill" href="#paper-P22">P22</a><a class="mini-pill" href="#paper-P23">P23</a></div></article><article class="approach-card"><h4>学习从当前误差到修正量的通用映射</h4><p>神经算子或图网络根据当前误差提出修正，并由经典算法继续求解。</p><div class="approach-evidence"><span class="paradigm-pill">R3</span><span class="paradigm-pill">R4</span><span class="paradigm-pill">X1</span><a class="mini-pill" href="#paper-P14">P14</a><a class="mini-pill" href="#paper-P18">P18</a><a class="mini-pill" href="#paper-P19">P19</a><a class="mini-pill" href="#paper-P24">P24</a></div></article><article class="approach-card"><h4>不预先假定最优配置，在运行中调整</h4><p>从同一次模拟的早期求解中学习，逐步选择后续配置。</p><div class="approach-evidence"><span class="paradigm-pill">R5</span><a class="mini-pill" href="#paper-P15">P15</a><a class="mini-pill" href="#paper-P25">P25</a></div></article></div><div class="landscape-notes"><p><b>现有思路还缺什么</b>局部表示便宜，却可能看不到整个矩阵的难度；全局模型看得更多，但推理更贵。很多所谓泛化仍局限在同一方程族或相近数据来源。</p><p><b>与 Alioth 的关系</b>Alioth 的逐行无量纲特征有利于跨尺寸使用，但是否能跨方程、跨来源稳定工作仍需要严格隔离的测试。</p></div></article><article class="landscape-row" id="problem-Q3"><header class="landscape-head"><span>Q3</span><div><h3>怎样保证最终答案足够准确，并在失败时给出明确结果</h3><p>工程求解关心真实残差、达到的精度和失败处置，不能只看神经网络的平均预测误差。</p></div></header><div class="approach-list"><article class="approach-card"><h4>让经典迭代负责最后的精度</h4><p>学习模块只提供预条件器、修正量或初值，经典迭代继续工作直到达到停止条件。</p><div class="approach-evidence"><span class="paradigm-pill">R2</span><span class="paradigm-pill">R3</span><span class="paradigm-pill">R4</span><a class="mini-pill" href="#paper-P09">P09</a><a class="mini-pill" href="#paper-P12">P12</a><a class="mini-pill" href="#paper-P14">P14</a><a class="mini-pill" href="#paper-P19">P19</a><a class="mini-pill" href="#paper-P22">P22</a><a class="mini-pill" href="#paper-P23">P23</a><a class="mini-pill" href="#paper-P24">P24</a></div></article><article class="approach-card"><h4>在限定条件下给出收敛论证</h4><p>把神经模块嵌入多层校正，并在论文假设范围内分析收敛或正确性。</p><div class="approach-evidence"><span class="paradigm-pill">R3</span><a class="mini-pill" href="#paper-P13">P13</a></div></article><article class="approach-card"><h4>检查运行结果并切换配置</h4><p>在线选择只使用传统候选，或在学习配置失败时换用备用方案。</p><div class="approach-evidence"><span class="paradigm-pill">R5</span><a class="mini-pill" href="#paper-P15">P15</a><a class="mini-pill" href="#paper-P25">P25</a></div></article></div><div class="landscape-notes"><p><b>现有思路还缺什么</b>理论保证通常依赖较窄的方程和数据假设；运行时检查能发现失败，却不一定能及时救回，也很少完整报告备用方案的成功率和额外时间。</p><p><b>与 Alioth 的关系</b>Alioth 已由 FCG 继续压低残差，并在学习配置未达要求时尝试传统配置；下一步应系统统计拒绝、切换和救回结果。</p></div></article><article class="landscape-row" id="problem-Q4"><header class="landscape-head"><span>Q4</span><div><h3>减少迭代以后，总运行时间是否真的更短</h3><p>网络推理、三角求解、粗层通信和求解前准备都可能抵消少做几次迭代带来的收益。</p></div></header><div class="approach-list"><article class="approach-card"><h4>生成适合 GPU 并行执行的稀疏算子</h4><p>使用稀疏近似逆或局部多项式，让主要计算变成容易并行的矩阵—向量运算。</p><div class="approach-evidence"><span class="paradigm-pill">R1</span><span class="paradigm-pill">R2</span><a class="mini-pill" href="#paper-P21">P21</a><a class="mini-pill" href="#paper-P22">P22</a><a class="mini-pill" href="#paper-P23">P23</a></div></article><article class="approach-card"><h4>减少或取消求解过程中的模型调用</h4><p>在求解前生成较好初值，或者把训练得到的规律变成部署时直接执行的公式。</p><div class="approach-evidence"><span class="paradigm-pill">R4</span><a class="mini-pill" href="#paper-P21">P21</a><a class="mini-pill" href="#paper-P24">P24</a></div></article><article class="approach-card"><h4>不用机器学习，直接重组 GPU 数值算法</h4><p>通过域分解、批量小矩阵运算和减少同步获得可靠速度，作为判断机器学习是否必要的强对照。</p><div class="approach-evidence"><span class="paradigm-pill">B1</span><a class="mini-pill" href="#paper-P20">P20</a></div></article></div><div class="landscape-notes"><p><b>现有思路还缺什么</b>不少论文仍只报告迭代次数或单次应用成本，没有把训练、准备、推理、通信、失败和显存全部算入。不同实现质量也会改变结论。</p><p><b>与 Alioth 的关系</b>Alioth 选择极小网络和多项式平滑，方向上符合低开销 GPU 执行；是否真正更快仍应与认真调优的传统方法按完整运行时间比较。</p></div></article><article class="landscape-row" id="problem-Q5"><header class="landscape-head"><span>Q5</span><div><h3>求解前的准备成本在什么任务里值得</h3><p>只求解一次、连续时间步反复求解和多个右端项重复求解，对准备时间的容忍度完全不同。</p></div></header><div class="approach-list"><article class="approach-card"><h4>把学习结果重复用于很多次求解</h4><p>在相近矩阵序列、多个右端项或连续时间步中摊薄训练和准备成本。</p><div class="approach-evidence"><span class="paradigm-pill">R1</span><span class="paradigm-pill">R2</span><span class="paradigm-pill">R5</span><a class="mini-pill" href="#paper-P05">P05</a><a class="mini-pill" href="#paper-P12">P12</a><a class="mini-pill" href="#paper-P15">P15</a><a class="mini-pill" href="#paper-P25">P25</a></div></article><article class="approach-card"><h4>只提供初值或可直接执行的公式</h4><p>缩短模型调用路径，或者在部署时完全不运行神经网络。</p><div class="approach-evidence"><span class="paradigm-pill">R4</span><a class="mini-pill" href="#paper-P21">P21</a><a class="mini-pill" href="#paper-P24">P24</a></div></article><article class="approach-card"><h4>一次生成后反复使用同一组件</h4><p>先为当前矩阵生成预条件组件，再在后续迭代中重复使用。</p><div class="approach-evidence"><span class="paradigm-pill">R1</span><span class="paradigm-pill">R2</span><a class="mini-pill" href="#paper-P09">P09</a><a class="mini-pill" href="#paper-P22">P22</a><a class="mini-pill" href="#paper-P23">P23</a></div></article></div><div class="landscape-notes"><p><b>现有思路还缺什么</b>现有论文常混用一次性求解和可摊销场景，也很少给出达到盈亏平衡需要重复多少次。</p><p><b>与 Alioth 的关系</b>Alioth 的一次小网络推理适合控制准备成本，但仍要分别评估一次性矩阵、多个右端项和连续仿真三种使用方式。</p></div></article><article class="landscape-row" id="problem-Q6"><header class="landscape-head"><span>Q6</span><div><h3>面对少见矩阵时会不会失效</h3><p>真实任务中总有训练数据没有覆盖的长尾实例，平均加速不能代替成功率、失败案例和备用方案统计。</p></div></header><div class="approach-list"><article class="approach-card"><h4>扩大到多来源稀疏矩阵</h4><p>用图表示、尺度不敏感损失或局部结构处理不同大小与来源的矩阵。</p><div class="approach-evidence"><span class="paradigm-pill">R2</span><span class="paradigm-pill">R3</span><a class="mini-pill" href="#paper-P19">P19</a><a class="mini-pill" href="#paper-P22">P22</a><a class="mini-pill" href="#paper-P23">P23</a></div></article><article class="approach-card"><h4>根据早期求解反馈选择或拒绝配置</h4><p>发现某个配置表现不好时，及时换用其他候选。</p><div class="approach-evidence"><span class="paradigm-pill">R5</span><a class="mini-pill" href="#paper-P15">P15</a><a class="mini-pill" href="#paper-P25">P25</a></div></article><article class="approach-card"><h4>保留不依赖训练数据的传统强基线</h4><p>当学习方法不可靠或收益不足时，仍能回到可检查的数值算法。</p><div class="approach-evidence"><span class="paradigm-pill">B1</span><a class="mini-pill" href="#paper-P20">P20</a></div></article></div><div class="landscape-notes"><p><b>现有思路还缺什么</b>训练和测试可能共享数据来源或近似重复样本，公开结果也常只给平均值。对真正少见矩阵，现有工作还缺少统一的压力测试和失败分类。</p><p><b>与 Alioth 的关系</b>Alioth 已检查求解是否达到要求并准备备用配置，但还应把陌生矩阵上的拒绝率、救回率和最坏情况时间作为主要指标。</p></div></article></div></section>
+    <section class="section" id="research-timeline"><div class="section-head"><div class="section-no">02</div><div><div class="eyebrow">Research Timeline</div><h2>变化的不只是年份，而是问题、机制与证据边界</h2><p>每一阶段都由问题变化驱动；Alioth 作为用户项目接受同一证据标准，而不是被写成历史终点。</p></div></div><div class="content timeline">
+      <article class="phase">
+        <div class="phase-year">2019–2021</div>
+        <div><h3>开始用神经网络自动设计多重网格组件</h3><p>从“专家如何设计延拓算子和粗化规则”转向“能否从一类问题中自动生成层级结构”。</p>
+        <p class="phase-note">最初的工作先学习怎样把粗层修正传回细层，随后又开始学习怎样选择粗层。神经网络主要在正式迭代前工作。</p><a class="mini-pill" href="#paper-P01">P01</a><a class="mini-pill" href="#paper-P02">P02</a><a class="mini-pill" href="#paper-P03">P03</a><a class="mini-pill" href="#paper-P04">P04</a></div>
+      </article>
+      <article class="phase">
+        <div class="phase-year">2022–2023</div>
+        <div><h3>神经网络开始参与求解器的更多环节</h3><p>研究者不再只学习一个层间传递算子，而是让神经网络参与平滑、域分解接口、矩阵因子、搜索方向等更多环节。</p>
+        <p class="phase-note">模型更靠近每轮迭代，表达能力增强，同时暴露应用成本、三角依赖与方程专用性。</p><a class="mini-pill" href="#paper-P05">P05</a><a class="mini-pill" href="#paper-P06">P06</a><a class="mini-pill" href="#paper-P07">P07</a><a class="mini-pill" href="#paper-P08">P08</a><a class="mini-pill" href="#paper-P09">P09</a><a class="mini-pill" href="#paper-P10">P10</a><a class="mini-pill" href="#paper-P11">P11</a><a class="mini-pill" href="#paper-P12">P12</a></div>
+      </article>
+      <article class="phase">
+        <div class="phase-year">2024</div>
+        <div><h3>让神经网络和经典算法各做擅长的部分</h3><p>神经模块如何参与而不牺牲高精度、收敛与跨尺度使用？</p>
+        <p class="phase-note">UGrid 试图从理论上说明何时能够收敛；FCG-NO 让神经网络负责提出修正、经典迭代负责继续提高精度；HINTS 让两类方法分别处理不同类型的误差；在线调参则直接利用求解过程中的反馈。</p><a class="mini-pill" href="#paper-P13">P13</a><a class="mini-pill" href="#paper-P14">P14</a><a class="mini-pill" href="#paper-P15">P15</a><a class="mini-pill" href="#paper-P16">P16</a><a class="mini-pill" href="#paper-P17">P17</a><a class="mini-pill" href="#paper-P18">P18</a></div>
+      </article>
+      <article class="phase">
+        <div class="phase-year">2025</div>
+        <div><h3>从减少迭代次数转向关心真实运行时间</h3><p>减少迭代次数还不够：加上求解前准备、神经网络推理和 GPU 执行后，总时间是否真的更短？</p>
+        <p class="phase-note">这一阶段出现了面向一般稀疏矩阵的方法、适合 GPU 的稀疏近似逆、可直接执行的符号公式，以及认真优化过的传统直接求解方法。评价重点逐渐从数学指标转向完整运行时间。</p><a class="mini-pill" href="#paper-P19">P19</a><a class="mini-pill" href="#paper-P20">P20</a><a class="mini-pill" href="#paper-P21">P21</a><a class="mini-pill" href="#paper-P22">P22</a></div>
+      </article>
+      <article class="phase">
+        <div class="phase-year">2026</div>
+        <div><h3>尽量少改现有求解器，并在运行中自动调节</h3><p>如何把学习增强稳妥接入现有仿真，并把收益与正确性责任说清楚？</p>
+        <p class="phase-note">有些工作只让神经网络提供较好的初始解，有些工作在运行中选择传统预条件器，还有些工作直接生成稀疏预条件器。Alioth 则尝试一次生成可并行的多重网格组件，再由经典迭代继续求精确解。</p><a class="mini-pill" href="#paper-P23">P23</a><a class="mini-pill" href="#paper-P24">P24</a><a class="mini-pill" href="#paper-P25">P25</a><span class="mini-pill">Alioth（未正式发表）</span></div>
+      </article></div></section>
+    <section class="section" id="research-evolution"><div class="section-head"><div class="section-no">03</div><div><div class="eyebrow">Research Evolution</div><h2>思想之间如何继承、修正与组合</h2><p>因果边代替简单年表。</p></div></div><div class="content"><ul class="evolution-list">
+      <li><span class="edge-kind">修正</span><b>P01 → P03</b><p>早期方法只能处理规则网格；后续工作改用图网络读取稀疏矩阵，从而能够面对更一般的连接结构。</p></li>
+      <li><span class="edge-kind">结合</span><b>P03 → P04/P11</b><p>神经网络最初只学习粗细层之间怎样传递信息，后来又开始学习粗层节点怎样选择，以及多个层级组件怎样一起设计。</p></li>
+      <li><span class="edge-kind">修正</span><b>P07/P09 → P22/P23</b><p>后续工作发现，减少迭代次数并不自动等于更快，于是开始同时考虑三角求解的顺序依赖、GPU 上的矩阵—向量乘法形式和完整运行时间。</p></li>
+      <li><span class="edge-kind">替代</span><b>端到端神经解 → P13/P14/P18/P24</b><p>神经网络不再独自给出最终答案，而只提供修正量、预条件器或初始解；经典迭代算法继续工作，直到达到要求的精度。</p></li>
+      <li><span class="edge-kind">取舍</span><b>离线学习 → P15/P25</b><p>牺牲生成新算子的表达能力，换取零预训练、可解释反馈与模拟内适应。</p></li>
+      <li><span class="edge-kind">继承</span><b>大模型推理 → P21/Alioth</b><p>保留实例条件化思想，但把部署对象压缩为符号公式或约1.5k参数局部网络。</p></li>
+      <li><span class="edge-kind">取舍</span><b>学习 solver → P20</b><p>现代 GPU 直接求解方法说明，一部分性能问题可以通过重新组织数值计算解决。因此学习方法必须和认真优化过的传统实现比较。</p></li></ul></div></section>
+    <section class="section" id="classification"><div class="section-head"><div class="section-no">04</div><div><div class="eyebrow">Conceptual Classification</div><h2>按求解过程怎样组织、神经网络负责学什么来分类</h2><p>第一条轴看完整求解过程怎样搭起来：多重网格、域分解、经典迭代外层、在线选择或直接求解。第二条轴看学习模块究竟输出什么。两条轴回答的是不同问题，因此同一篇论文可以同时出现在多个类别中。</p></div></div><div class="content class-grid"><article class="class-column"><h3>求解骨架</h3><ul><li><b>多重网格或多层校正</b><span>保留粗细层级与循环结构，学习模块只改其中的层间传递、粗化、平滑或粗层算子。</span><div class="class-papers"><a class="mini-pill" href="#paper-P01">P01</a><a class="mini-pill" href="#paper-P02">P02</a><a class="mini-pill" href="#paper-P03">P03</a><a class="mini-pill" href="#paper-P04">P04</a><a class="mini-pill" href="#paper-P05">P05</a><a class="mini-pill" href="#paper-P07">P07</a><a class="mini-pill" href="#paper-P11">P11</a><a class="mini-pill" href="#paper-P13">P13</a><a class="mini-pill" href="#paper-P16">P16</a><a class="mini-pill" href="#paper-P17">P17</a><span class="project-chip">Alioth</span></div></li><li><b>域分解或 Schwarz 方法</b><span>先把大问题拆成子区域，再学习子区域接口或多层耦合；P20 是不使用机器学习的直接求解对照。</span><div class="class-papers"><a class="mini-pill" href="#paper-P06">P06</a><a class="mini-pill" href="#paper-P11">P11</a><a class="mini-pill" href="#paper-P20">P20</a></div></li><li><b>经典迭代作为外层，学习模块负责加速</b><span>共轭梯度法、灵活共轭梯度法或其他 Krylov 迭代继续控制最终精度，学习模块提供预条件器、修正量、搜索方向或初值。</span><div class="class-papers"><a class="mini-pill" href="#paper-P06">P06</a><a class="mini-pill" href="#paper-P08">P08</a><a class="mini-pill" href="#paper-P09">P09</a><a class="mini-pill" href="#paper-P10">P10</a><a class="mini-pill" href="#paper-P12">P12</a><a class="mini-pill" href="#paper-P14">P14</a><a class="mini-pill" href="#paper-P16">P16</a><a class="mini-pill" href="#paper-P18">P18</a><a class="mini-pill" href="#paper-P19">P19</a><a class="mini-pill" href="#paper-P21">P21</a><a class="mini-pill" href="#paper-P22">P22</a><a class="mini-pill" href="#paper-P23">P23</a><a class="mini-pill" href="#paper-P24">P24</a><span class="project-chip">Alioth</span></div></li><li><b>运行中选择传统配置</b><span>不生成新的矩阵算子，而是根据连续求解过程中得到的反馈，从已有参数或预条件器中选择。</span><div class="class-papers"><a class="mini-pill" href="#paper-P15">P15</a><a class="mini-pill" href="#paper-P25">P25</a></div></li><li><b>不用机器学习的直接求解</b><span>通过重新组织域分解和 GPU 计算获得速度，用来判断学习方法是否真的带来额外收益。</span><div class="class-papers"><a class="mini-pill" href="#paper-P20">P20</a></div></li></ul></article><article class="class-column"><h3>神经网络学习什么</h3><ul><li><b>网格层级、粗化和层间传递</b><span>决定粗层问题怎样形成，以及粗层修正怎样返回原问题。</span><div class="class-papers"><a class="mini-pill" href="#paper-P01">P01</a><a class="mini-pill" href="#paper-P02">P02</a><a class="mini-pill" href="#paper-P03">P03</a><a class="mini-pill" href="#paper-P04">P04</a><a class="mini-pill" href="#paper-P11">P11</a><a class="mini-pill" href="#paper-P17">P17</a></div></li><li><b>平滑器或松弛参数</b><span>决定每一层怎样快速消除局部误差；Alioth 学习的是逐行、逐层的多项式平滑系数。</span><div class="class-papers"><a class="mini-pill" href="#paper-P05">P05</a><a class="mini-pill" href="#paper-P07">P07</a><a class="mini-pill" href="#paper-P15">P15</a><span class="project-chip">Alioth</span></div></li><li><b>域分解接口与多层耦合参数</b><span>决定各子区域之间怎样交换信息，以及局部修正怎样与粗层修正配合。</span><div class="class-papers"><a class="mini-pill" href="#paper-P06">P06</a><a class="mini-pill" href="#paper-P11">P11</a></div></li><li><b>矩阵因子、稀疏近似逆或预条件公式</b><span>直接生成能把原方程变得更容易求解的矩阵结构或公式。</span><div class="class-papers"><a class="mini-pill" href="#paper-P09">P09</a><a class="mini-pill" href="#paper-P12">P12</a><a class="mini-pill" href="#paper-P21">P21</a><a class="mini-pill" href="#paper-P22">P22</a><a class="mini-pill" href="#paper-P23">P23</a></div></li><li><b>根据当前误差生成修正量或搜索方向</b><span>网络在求解过程中反复读取当前误差，并提出下一步怎样修改答案。</span><div class="class-papers"><a class="mini-pill" href="#paper-P08">P08</a><a class="mini-pill" href="#paper-P10">P10</a><a class="mini-pill" href="#paper-P13">P13</a><a class="mini-pill" href="#paper-P14">P14</a><a class="mini-pill" href="#paper-P16">P16</a><a class="mini-pill" href="#paper-P18">P18</a><a class="mini-pill" href="#paper-P19">P19</a></div></li><li><b>初始解</b><span>网络只负责给传统求解器一个更接近答案的起点。</span><div class="class-papers"><a class="mini-pill" href="#paper-P24">P24</a></div></li><li><b>从已有配置中作选择</b><span>学习的是选择策略，而不是新的预条件矩阵或多重网格组件。</span><div class="class-papers"><a class="mini-pill" href="#paper-P15">P15</a><a class="mini-pill" href="#paper-P25">P25</a></div></li><li><b>不训练神经网络</b><span>P02 直接优化网格参数，P15/P25 使用在线选择，P20 完全依靠数值算法与 GPU 实现；把它们单列出来可避免把所有自动调节都误称为神经网络。</span><div class="class-papers"><a class="mini-pill" href="#paper-P02">P02</a><a class="mini-pill" href="#paper-P15">P15</a><a class="mini-pill" href="#paper-P20">P20</a><a class="mini-pill" href="#paper-P25">P25</a></div></li></ul></article></div></section>
+    <section class="section" id="literature-corpus"><div class="section-head"><div class="section-no">05</div><div><div class="eyebrow">Literature Corpus</div><h2>25 张论文研究卡</h2><p>25篇核心论文由官方 proceedings、publisher 页面或最终出版物元数据核验。15篇直接改变多重网格组件、预条件器或搜索方向；9篇提供强竞争或补充范式；1篇是不学习的 GPU 数值强基线。</p></div></div><div class="content">
+      <div class="filters" role="group" aria-label="论文筛选"><button type="button" class="filter active" data-filter="all" aria-pressed="true">全部</button><button type="button" class="filter" data-filter="directly-related" aria-pressed="false">直接相关</button><button type="button" class="filter" data-filter="strongly-related" aria-pressed="false">强相关</button><button type="button" class="filter" data-filter="contextually-related" aria-pressed="false">语境相关</button><input id="paper-search" type="search" placeholder="检索标题、机制、发表场所…" aria-label="检索论文卡"><span id="paper-count" aria-live="polite">显示 25 / 25</span></div>
+      <noscript><style>.filters{display:none}</style><p><b>无 JavaScript 模式：</b>下方全部论文卡按时间完整显示。</p></noscript><div class="paper-grid">
+        <article class="paper-card" id="paper-P01" data-relevance="directly-related" data-year="2019" data-search="learning to optimize multigrid pde solvers daniel greenfeld, meirav galun, ron kimmel, irad yavneh, ronen basri icml 为一族二维扩散方程自动构造问题相关的延拓算子。 训练单个神经网络从离散方程映射到 prolongation（延拓算子，把粗层修正传回细层），而非直接预测解；用两网格收敛相关目标进行无监督训练。 cnn 读取规则网格算子模板并输出稀疏 p，经典 gauss–seidel 平滑和 multigrid 周期继续求解。 alioth 的直接思想前身：都学习可被经典 multigrid 消费的组件；区别是 p 对低能量误差建模，alioth v0 学逐行平滑系数。">
+          <div class="paper-topline"><span class="paper-id">P01</span><span>2019 · ICML</span></div>
+          <h3><a href="https://proceedings.mlr.press/v97/greenfeld19a.html" target="_blank" rel="noreferrer">Learning to Optimize Multigrid PDE Solvers</a></h3>
+          <div class="paper-tags"><span class="pill">正式出版</span><span class="pill">Tier 1 / CCF-A</span><span class="pill">直接相关</span></div>
+          <p class="paper-problem"><b>研究问题</b>为一族二维扩散方程自动构造问题相关的延拓算子。</p>
+          <p><b>核心思路</b>训练单个神经网络从离散方程映射到 prolongation（延拓算子，把粗层修正传回细层），而非直接预测解；用两网格收敛相关目标进行无监督训练。</p>
+          <p><b>关键证据</b>论文在广泛二维扩散问题上相对 Black-Box multigrid 改善收敛率，并展示由小网格向更大网格迁移。</p>
+          <p class="relation"><b>与 Alioth 的关系</b>Alioth 的直接思想前身：都学习可被经典 multigrid 消费的组件；区别是 P 对低能量误差建模，Alioth v0 学逐行平滑系数。</p>
+          <details>
+            <summary>展开完整论文研究卡</summary>
+            <dl>
+              <dt>作者</dt><dd>Daniel Greenfeld, Meirav Galun, Ron Kimmel, Irad Yavneh, Ronen Basri</dd>
+              <dt>此前局限</dt><dd>高效 multigrid 的 P 通常需要专家针对新 PDE 设计。</dd>
+              <dt>技术机制</dt><dd>CNN 读取规则网格算子模板并输出稀疏 P，经典 Gauss–Seidel 平滑和 multigrid 周期继续求解。</dd>
+              <dt>研究维度</dt><dd><span class="mini-pill">multigrid</span><span class="mini-pill">learned prolongation</span><span class="mini-pill">unsupervised convergence loss</span><span class="mini-pill">size transfer</span></dd>
+              <dt>证据边界</dt><dd>已读官方页面与论文内容摘要；规则网格、二维扩散范围，不能与 SuiteSparse/GPU 指标直接比较。</dd>
+              <dt>发表场所说明</dt><dd>ICML 是 CCF-A；论文是学习生成 multigrid prolongation 的早期主线锚点。</dd>
+              <dt>来源</dt><dd><a class="source-chip" href="https://proceedings.mlr.press/v97/greenfeld19a.html" target="_blank" rel="noreferrer">S04</a></dd>
+            </dl>
+          </details>
+        </article>
+        <article class="paper-card" id="paper-P02" data-relevance="directly-related" data-year="2020" data-search="black-box learning of multigrid parameters alexandr katrutsa, talgat daulbaev, ivan oseledets journal of computational and applied mathematics 在缺少解析最优性结果时自动优化几何多重网格的 restriction 与 prolongation。 把 multigrid 实现在可微框架中，最小化估计谱半径的随机收敛泛函。 自动微分计算收敛泛函对网格间算子的梯度，再用随机梯度下降优化参数。 同样把求解器设计视为优化问题，但更像逐类/逐设定离线优化，不是从新矩阵一次前向生成局部系数。">
+          <div class="paper-topline"><span class="paper-id">P02</span><span>2020 · Journal of Computational and Applied Mathematics</span></div>
+          <h3><a href="https://www.sciencedirect.com/science/article/pii/S0377042719305291" target="_blank" rel="noreferrer">Black-box Learning of Multigrid Parameters</a></h3>
+          <div class="paper-tags"><span class="pill">正式出版</span><span class="pill">Tier 2 / numerical computing journal</span><span class="pill">直接相关</span></div>
+          <p class="paper-problem"><b>研究问题</b>在缺少解析最优性结果时自动优化几何多重网格的 restriction 与 prolongation。</p>
+          <p><b>核心思路</b>把 multigrid 实现在可微框架中，最小化估计谱半径的随机收敛泛函。</p>
+          <p><b>关键证据</b>Poisson、Helmholtz 与奇异扰动对流扩散实验显示所学算子带来更快收敛。</p>
+          <p class="relation"><b>与 Alioth 的关系</b>同样把求解器设计视为优化问题，但更像逐类/逐设定离线优化，不是从新矩阵一次前向生成局部系数。</p>
+          <details>
+            <summary>展开完整论文研究卡</summary>
+            <dl>
+              <dt>作者</dt><dd>Alexandr Katrutsa, Talgat Daulbaev, Ivan Oseledets</dd>
+              <dt>此前局限</dt><dd>手工算子缺少普适最优性，解析推导局限于简单方程。</dd>
+              <dt>技术机制</dt><dd>自动微分计算收敛泛函对网格间算子的梯度，再用随机梯度下降优化参数。</dd>
+              <dt>研究维度</dt><dd><span class="mini-pill">geometric multigrid</span><span class="mini-pill">learned restriction/prolongation</span><span class="mini-pill">automatic differentiation</span></dd>
+              <dt>证据边界</dt><dd>基于 publisher 摘要；未抽取统一端到端时间与硬件数字。</dd>
+              <dt>发表场所说明</dt><dd>该期刊是数值计算专业期刊；本工作代表用自动微分直接优化 multigrid 参数的非神经生成路线。</dd>
+              <dt>来源</dt><dd><a class="source-chip" href="https://www.sciencedirect.com/science/article/pii/S0377042719305291" target="_blank" rel="noreferrer">S05</a></dd>
+            </dl>
+          </details>
+        </article>
+        <article class="paper-card" id="paper-P03" data-relevance="directly-related" data-year="2020" data-search="learning algebraic multigrid using graph neural networks ilay luz, meirav galun, haggai maron, ronen basri, irad yavneh icml 只从稀疏矩阵图结构为一类 spd/spsd 系统生成 amg prolongation。 用 gnn 学习从整个矩阵类到稀疏 p 的映射，并以无监督收敛损失训练。 节点/边消息传递产生 p 的非零值，固定粗化和 gauss–seidel 等经典部件形成 amg。 是最直接的 amg 组件生成前身；alioth 保留 pyamg 的 p，把学习对象移到逐行、逐层的多项式 smoother。">
+          <div class="paper-topline"><span class="paper-id">P03</span><span>2020 · ICML</span></div>
+          <h3><a href="https://proceedings.mlr.press/v119/luz20a.html" target="_blank" rel="noreferrer">Learning Algebraic Multigrid Using Graph Neural Networks</a></h3>
+          <div class="paper-tags"><span class="pill">正式出版</span><span class="pill">Tier 1 / CCF-A</span><span class="pill">直接相关</span></div>
+          <p class="paper-problem"><b>研究问题</b>只从稀疏矩阵图结构为一类 SPD/SPSD 系统生成 AMG prolongation。</p>
+          <p><b>核心思路</b>用 GNN 学习从整个矩阵类到稀疏 P 的映射，并以无监督收敛损失训练。</p>
+          <p><b>关键证据</b>官方论文报告在图拉普拉斯与有限元扩散问题上优于 classical AMG 收敛率，并评估跨规模使用。</p>
+          <p class="relation"><b>与 Alioth 的关系</b>是最直接的 AMG 组件生成前身；Alioth 保留 PyAMG 的 P，把学习对象移到逐行、逐层的多项式 smoother。</p>
+          <details>
+            <summary>展开完整论文研究卡</summary>
+            <dl>
+              <dt>作者</dt><dd>Ilay Luz, Meirav Galun, Haggai Maron, Ronen Basri, Irad Yavneh</dd>
+              <dt>此前局限</dt><dd>规则网格 CNN 不能自然处理任意稀疏图与非结构网格。</dd>
+              <dt>技术机制</dt><dd>节点/边消息传递产生 P 的非零值，固定粗化和 Gauss–Seidel 等经典部件形成 AMG。</dd>
+              <dt>研究维度</dt><dd><span class="mini-pill">AMG</span><span class="mini-pill">GNN</span><span class="mini-pill">learned prolongation</span><span class="mini-pill">sparse graph</span><span class="mini-pill">size generalization</span></dd>
+              <dt>证据边界</dt><dd>已读 proceedings 与论文片段；设置成本和运行硬件不同，不可与 Alioth 数字直接排名。</dd>
+              <dt>发表场所说明</dt><dd>ICML 是 CCF-A；论文把学习 P 从规则网格推广到一般稀疏 SPD/SPSD 图。</dd>
+              <dt>来源</dt><dd><a class="source-chip" href="https://proceedings.mlr.press/v119/luz20a.html" target="_blank" rel="noreferrer">S06</a></dd>
+            </dl>
+          </details>
+        </article>
+        <article class="paper-card" id="paper-P04" data-relevance="directly-related" data-year="2021" data-search="optimization-based algebraic multigrid coarsening using reinforcement learning ali taghibakhshi, scott maclachlan, luke olson, matthew west neurips 在给定 amg 层级中自动选择粗图，减少 coarsening（粗化，即选择更小粗层问题）对手工规则的依赖。 把粗化变成 gnn 驱动的强化学习决策，并让小图策略迁移到大图。 dueling double dqn 顺序选择粗点，配合线性复杂度推理过程构建 coarse graph。 说明 amg 的另一个高杠杆组件也可学习；alioth v0 目前不学 coarse graph。">
+          <div class="paper-topline"><span class="paper-id">P04</span><span>2021 · NeurIPS</span></div>
+          <h3><a href="https://proceedings.neurips.cc/paper/2021/hash/6531b32f8d02fece98ff36a64a7c8260-Abstract.html" target="_blank" rel="noreferrer">Optimization-Based Algebraic Multigrid Coarsening Using Reinforcement Learning</a></h3>
+          <div class="paper-tags"><span class="pill">正式出版</span><span class="pill">Tier 1 / CCF-A</span><span class="pill">直接相关</span></div>
+          <p class="paper-problem"><b>研究问题</b>在给定 AMG 层级中自动选择粗图，减少 coarsening（粗化，即选择更小粗层问题）对手工规则的依赖。</p>
+          <p><b>核心思路</b>把粗化变成 GNN 驱动的强化学习决策，并让小图策略迁移到大图。</p>
+          <p><b>关键证据</b>论文在多类结构/非结构平面图上报告优于既有粗化目标，并测试到约5.2万节点与高纵横比网格。</p>
+          <p class="relation"><b>与 Alioth 的关系</b>说明 AMG 的另一个高杠杆组件也可学习；Alioth v0 目前不学 coarse graph。</p>
+          <details>
+            <summary>展开完整论文研究卡</summary>
+            <dl>
+              <dt>作者</dt><dd>Ali Taghibakhshi, Scott MacLachlan, Luke Olson, Matthew West</dd>
+              <dt>此前局限</dt><dd>已有学习 AMG 工作常假定粗点集合已给定。</dd>
+              <dt>技术机制</dt><dd>Dueling Double DQN 顺序选择粗点，配合线性复杂度推理过程构建 coarse graph。</dd>
+              <dt>研究维度</dt><dd><span class="mini-pill">AMG</span><span class="mini-pill">learned coarsening</span><span class="mini-pill">reinforcement learning</span><span class="mini-pill">linear-time inference</span></dd>
+              <dt>证据边界</dt><dd>正式 proceedings 与代码仓库已核验；主要是二维 Poisson 图族。</dd>
+              <dt>发表场所说明</dt><dd>NeurIPS 是 CCF-A；论文学习 P 之外的互补组件——coarsening。</dd>
+              <dt>来源</dt><dd><a class="source-chip" href="https://proceedings.neurips.cc/paper/2021/hash/6531b32f8d02fece98ff36a64a7c8260-Abstract.html" target="_blank" rel="noreferrer">S07</a></dd>
+            </dl>
+          </details>
+        </article>
+        <article class="paper-card" id="paper-P05" data-relevance="directly-related" data-year="2022" data-search="data-driven multi-grid solver for accelerated pressure projection gabriel d. weymouth computers &amp; fluids 加速非定常不可压缩流动中反复出现的压力 poisson 投影。 把 geometric multigrid 识别为线性卷积 encoder–decoder，并用自动微分优化 data-driven smoother。 从流动模拟采集 poisson 矩阵/残差，学习 smoother 参数并嵌入经典 mg。 与 alioth 同样学习 smoother 且关注压力方程，但它绑定几何网格与 cfd 数据，alioth 主张矩阵级零样本迁移。">
+          <div class="paper-topline"><span class="paper-id">P05</span><span>2022 · Computers &amp; Fluids</span></div>
+          <h3><a href="https://www.sciencedirect.com/science/article/pii/S0045793022002213" target="_blank" rel="noreferrer">Data-Driven Multi-Grid Solver for Accelerated Pressure Projection</a></h3>
+          <div class="paper-tags"><span class="pill">正式出版</span><span class="pill">Tier 2 / CFD specialty journal</span><span class="pill">直接相关</span></div>
+          <p class="paper-problem"><b>研究问题</b>加速非定常不可压缩流动中反复出现的压力 Poisson 投影。</p>
+          <p><b>核心思路</b>把 geometric multigrid 识别为线性卷积 encoder–decoder，并用自动微分优化 data-driven smoother。</p>
+          <p><b>关键证据</b>作者报告在11个二维/三维流动案例上相对经典 MG 加速2–3倍且无精度损失，升分辨率后保留近100%效果。</p>
+          <p class="relation"><b>与 Alioth 的关系</b>与 Alioth 同样学习 smoother 且关注压力方程，但它绑定几何网格与 CFD 数据，Alioth 主张矩阵级零样本迁移。</p>
+          <details>
+            <summary>展开完整论文研究卡</summary>
+            <dl>
+              <dt>作者</dt><dd>Gabriel D. Weymouth</dd>
+              <dt>此前局限</dt><dd>压力投影占主要计算成本，固定 multigrid smoother 未针对数据分布优化。</dd>
+              <dt>技术机制</dt><dd>从流动模拟采集 Poisson 矩阵/残差，学习 smoother 参数并嵌入经典 MG。</dd>
+              <dt>研究维度</dt><dd><span class="mini-pill">geometric multigrid</span><span class="mini-pill">data-driven smoother</span><span class="mini-pill">pressure Poisson</span><span class="mini-pill">resolution transfer</span></dd>
+              <dt>证据边界</dt><dd>publisher 页面与 final-version metadata；性能是论文作者报告。</dd>
+              <dt>发表场所说明</dt><dd>Computers &amp; Fluids 是 CFD 数值计算权威专业期刊；该文直接评估 learned smoother 在压力投影中的真实流动迁移。</dd>
+              <dt>来源</dt><dd><a class="source-chip" href="https://www.sciencedirect.com/science/article/pii/S0045793022002213" target="_blank" rel="noreferrer">S08</a></dd>
+            </dl>
+          </details>
+        </article>
+        <article class="paper-card" id="paper-P06" data-relevance="strongly-related" data-year="2022" data-search="learning interface conditions in domain decomposition solvers ali taghibakhshi, nicolas nytko, tareq uz zaman, scott maclachlan, luke olson, matthew west neurips 把 optimized schwarz 的接口条件从规则网格推广到任意非结构网格。 用 gcnn 与无监督谱损失学习 subdomain interface modification。 局部图消息产生 oras 接口矩阵，由柔性 krylov 方法应用学习到的 preconditioner（预条件器，先把方程变得更容易求解）。 同样学习局部、可并行、由 krylov 消费的组件，但 numerical skeleton 是 ddm 而非 amg。">
+          <div class="paper-topline"><span class="paper-id">P06</span><span>2022 · NeurIPS</span></div>
+          <h3><a href="https://proceedings.neurips.cc/paper_files/paper/2022/hash/2f8928efe957139e9c0efc98f173f4be-Abstract-Conference.html" target="_blank" rel="noreferrer">Learning Interface Conditions in Domain Decomposition Solvers</a></h3>
+          <div class="paper-tags"><span class="pill">正式出版</span><span class="pill">Tier 1 / CCF-A</span><span class="pill">强相关</span></div>
+          <p class="paper-problem"><b>研究问题</b>把 optimized Schwarz 的接口条件从规则网格推广到任意非结构网格。</p>
+          <p><b>核心思路</b>用 GCNN 与无监督谱损失学习 subdomain interface modification。</p>
+          <p><b>关键证据</b>正式论文比较结构与非结构网格上的 classical/optimized DDM，展示小问题训练向大问题迁移且推理 O(n)。</p>
+          <p class="relation"><b>与 Alioth 的关系</b>同样学习局部、可并行、由 Krylov 消费的组件，但 numerical skeleton 是 DDM 而非 AMG。</p>
+          <details>
+            <summary>展开完整论文研究卡</summary>
+            <dl>
+              <dt>作者</dt><dd>Ali Taghibakhshi, Nicolas Nytko, Tareq Uz Zaman, Scott MacLachlan, Luke Olson, Matthew West</dd>
+              <dt>此前局限</dt><dd>最优接口条件需要繁琐分析，常只适用于简化结构网格。</dd>
+              <dt>技术机制</dt><dd>局部图消息产生 ORAS 接口矩阵，由柔性 Krylov 方法应用学习到的 preconditioner（预条件器，先把方程变得更容易求解）。</dd>
+              <dt>研究维度</dt><dd><span class="mini-pill">domain decomposition</span><span class="mini-pill">learned interface</span><span class="mini-pill">unstructured mesh</span><span class="mini-pill">linear scaling</span></dd>
+              <dt>证据边界</dt><dd>官方摘要与论文正文摘要；未与通用 SuiteSparse 直接重合。</dd>
+              <dt>发表场所说明</dt><dd>NeurIPS 是 CCF-A；论文代表学习并行 domain decomposition 局部接口的竞争路线。</dd>
+              <dt>来源</dt><dd><a class="source-chip" href="https://proceedings.neurips.cc/paper_files/paper/2022/hash/2f8928efe957139e9c0efc98f173f4be-Abstract-Conference.html" target="_blank" rel="noreferrer">S09</a></dd>
+            </dl>
+          </details>
+        </article>
+        <article class="paper-card" id="paper-P07" data-relevance="directly-related" data-year="2023" data-search="learning optimal multigrid smoothers via neural networks ru huang, ruipeng li, yuanzhe xi siam journal on scientific computing 为 anisotropic/variable-coefficient pde 自动寻找高效 smoother。 从 operator stencil 学习 cnn smoother，用 multigrid 收敛理论导出的监督损失训练。 小尺度同类 pde 上训练 convolutional smoother，再部署到更大尺度同类问题。 学习对象与 alioth 最接近；alioth 的差异候选是逐行无量纲矩阵特征、跨来源 spd 目标和回退回执。">
+          <div class="paper-topline"><span class="paper-id">P07</span><span>2023 · SIAM Journal on Scientific Computing</span></div>
+          <h3><a href="https://epubs.siam.org/doi/10.1137/21M1430030" target="_blank" rel="noreferrer">Learning Optimal Multigrid Smoothers via Neural Networks</a></h3>
+          <div class="paper-tags"><span class="pill">正式出版</span><span class="pill">Tier 2 / flagship scientific-computing journal</span><span class="pill">直接相关</span></div>
+          <p class="paper-problem"><b>研究问题</b>为 anisotropic/variable-coefficient PDE 自动寻找高效 smoother。</p>
+          <p><b>核心思路</b>从 operator stencil 学习 CNN smoother，用 multigrid 收敛理论导出的监督损失训练。</p>
+          <p><b>关键证据</b>SISC 论文在旋转各向异性 Laplacian 与变系数扩散上报告优于手工 relaxation 的收敛率和求解时间。</p>
+          <p class="relation"><b>与 Alioth 的关系</b>学习对象与 Alioth 最接近；Alioth 的差异候选是逐行无量纲矩阵特征、跨来源 SPD 目标和回退回执。</p>
+          <details>
+            <summary>展开完整论文研究卡</summary>
+            <dl>
+              <dt>作者</dt><dd>Ru Huang, Ruipeng Li, Yuanzhe Xi</dd>
+              <dt>此前局限</dt><dd>最佳 smoothing 规则依赖 PDE，手工 relaxation 在旋转各向异性问题上会退化。</dd>
+              <dt>技术机制</dt><dd>小尺度同类 PDE 上训练 convolutional smoother，再部署到更大尺度同类问题。</dd>
+              <dt>研究维度</dt><dd><span class="mini-pill">multigrid</span><span class="mini-pill">learned smoother</span><span class="mini-pill">CNN</span><span class="mini-pill">theory-derived loss</span><span class="mini-pill">scale transfer</span></dd>
+              <dt>证据边界</dt><dd>publisher 摘要与元数据；跨 PDE 家族能力没有被该文建立。</dd>
+              <dt>发表场所说明</dt><dd>SISC 是数值线性代数与高性能科学计算旗舰期刊；该文是 Alioth 学 smoother 的最直接正式前身之一。</dd>
+              <dt>来源</dt><dd><a class="source-chip" href="https://epubs.siam.org/doi/10.1137/21M1430030" target="_blank" rel="noreferrer">S10</a></dd>
+            </dl>
+          </details>
+        </article>
+        <article class="paper-card" id="paper-P08" data-relevance="strongly-related" data-year="2023" data-search="multigrid-augmented deep learning preconditioners for the helmholtz equation yael azulay, eran treister siam journal on scientific computing 在高波数异质 helmholtz 中构造可跨 residual 与介质使用的学习预条件器。 让 u-net 充当 coarse solver 或 deflation operator，并与 shifted-laplacian v-cycle 组合。 encoder 处理介质，solver 网络处理不同 rhs；必要时对已知介质 mini-retrain。 代表‘神经网络直接给 residual correction + 经典 krylov’路线；比 alioth 更表达性强但推理/训练更重且方程专用。">
+          <div class="paper-topline"><span class="paper-id">P08</span><span>2023 · SIAM Journal on Scientific Computing</span></div>
+          <h3><a href="https://epubs.siam.org/doi/10.1137/21M1433514" target="_blank" rel="noreferrer">Multigrid-Augmented Deep Learning Preconditioners for the Helmholtz Equation</a></h3>
+          <div class="paper-tags"><span class="pill">正式出版</span><span class="pill">Tier 2 / flagship scientific-computing journal</span><span class="pill">强相关</span></div>
+          <p class="paper-problem"><b>研究问题</b>在高波数异质 Helmholtz 中构造可跨 residual 与介质使用的学习预条件器。</p>
+          <p><b>核心思路</b>让 U-Net 充当 coarse solver 或 deflation operator，并与 shifted-Laplacian V-cycle 组合。</p>
+          <p><b>关键证据</b>论文在多类二维异质 Helmholtz 上展示效率和泛化，并报告 encoder–solver 比 standalone 更稳健高效。</p>
+          <p class="relation"><b>与 Alioth 的关系</b>代表‘神经网络直接给 residual correction + 经典 Krylov’路线；比 Alioth 更表达性强但推理/训练更重且方程专用。</p>
+          <details>
+            <summary>展开完整论文研究卡</summary>
+            <dl>
+              <dt>作者</dt><dd>Yael Azulay, Eran Treister</dd>
+              <dt>此前局限</dt><dd>shifted-Laplacian MG 在高波数/异质介质上仍昂贵，普通 CNN 缺全局校正。</dd>
+              <dt>技术机制</dt><dd>encoder 处理介质，solver 网络处理不同 RHS；必要时对已知介质 mini-retrain。</dd>
+              <dt>研究维度</dt><dd><span class="mini-pill">Helmholtz</span><span class="mini-pill">U-Net preconditioner</span><span class="mini-pill">multigrid</span><span class="mini-pill">multiple RHS</span><span class="mini-pill">mini-retraining</span></dd>
+              <dt>证据边界</dt><dd>publisher 摘要；二维 Helmholtz 与 Alioth SPD 范围不可直接比较。</dd>
+              <dt>发表场所说明</dt><dd>SISC 是该细分领域旗舰期刊；高波数 Helmholtz 是经典 AMG 困难问题，具有方法代表性。</dd>
+              <dt>来源</dt><dd><a class="source-chip" href="https://epubs.siam.org/doi/10.1137/21M1433514" target="_blank" rel="noreferrer">S11</a></dd>
+            </dl>
+          </details>
+        </article>
+        <article class="paper-card" id="paper-P09" data-relevance="directly-related" data-year="2023" data-search="learning preconditioners for conjugate gradient pde solvers yichen li, peter yichen chen, tao du, wojciech matusik icml 为二维/三维线性二阶 pde 自动生成高性能 pcg preconditioner。 让 gnn 估计系统矩阵的近似因子，并用结合 pde 数据分布的预条件器损失训练。 神经网络输出 cholesky-like factor，嵌入经典 pcg 以继续迭代到容差。 同为 spd+cg 的直接竞争路线；因子应用含三角求解，alioth 与 learned spai 更强调 gpu 友好执行原语。">
+          <div class="paper-topline"><span class="paper-id">P09</span><span>2023 · ICML</span></div>
+          <h3><a href="https://proceedings.mlr.press/v202/li23e.html" target="_blank" rel="noreferrer">Learning Preconditioners for Conjugate Gradient PDE Solvers</a></h3>
+          <div class="paper-tags"><span class="pill">正式出版</span><span class="pill">Tier 1 / CCF-A</span><span class="pill">直接相关</span></div>
+          <p class="paper-problem"><b>研究问题</b>为二维/三维线性二阶 PDE 自动生成高性能 PCG preconditioner。</p>
+          <p><b>核心思路</b>让 GNN 估计系统矩阵的近似因子，并用结合 PDE 数据分布的预条件器损失训练。</p>
+          <p><b>关键证据</b>ICML 论文在多类二维/三维 PDE 上报告有效性、跨物理参数与未见网格泛化，并与纯学习解法比较。</p>
+          <p class="relation"><b>与 Alioth 的关系</b>同为 SPD+CG 的直接竞争路线；因子应用含三角求解，Alioth 与 learned SPAI 更强调 GPU 友好执行原语。</p>
+          <details>
+            <summary>展开完整论文研究卡</summary>
+            <dl>
+              <dt>作者</dt><dd>Yichen Li, Peter Yichen Chen, Tao Du, Wojciech Matusik</dd>
+              <dt>此前局限</dt><dd>传统预条件器需问题知识和复杂矩阵操作，端到端网络难达到高精度。</dd>
+              <dt>技术机制</dt><dd>神经网络输出 Cholesky-like factor，嵌入经典 PCG 以继续迭代到容差。</dd>
+              <dt>研究维度</dt><dd><span class="mini-pill">PCG</span><span class="mini-pill">GNN</span><span class="mini-pill">approximate factorization</span><span class="mini-pill">PDE distribution</span><span class="mini-pill">mesh generalization</span></dd>
+              <dt>证据边界</dt><dd>proceedings 与论文实验章节片段；具体数据与 Alioth SuiteSparse 清单不同。</dd>
+              <dt>发表场所说明</dt><dd>ICML 是 CCF-A；论文是 GNN 生成近似矩阵分解预条件器的主要对照。</dd>
+              <dt>来源</dt><dd><a class="source-chip" href="https://proceedings.mlr.press/v202/li23e.html" target="_blank" rel="noreferrer">S12</a></dd>
+            </dl>
+          </details>
+        </article>
+        <article class="paper-card" id="paper-P10" data-relevance="strongly-related" data-year="2023" data-search="a deep conjugate direction method for iteratively solving linear systems ayano kaneda, osman akar, jingyu chen, victoria alicia trevino kala, david hyde, joseph teran icml 利用数据分布改进共轭方向，使大规模 spd 系统更快达到指定残差。 cnn 近似逆算子作用并在每次迭代提供更优 search direction。 保持 conjugate-direction 风格的迭代与残差推进，把网络作为方向生成器。 同样把网络放进可迭代收敛的数值骨架，但学习的是动态 search direction，alioth 生成可复用 v-cycle smoother。">
+          <div class="paper-topline"><span class="paper-id">P10</span><span>2023 · ICML</span></div>
+          <h3><a href="https://proceedings.mlr.press/v202/kaneda23a.html" target="_blank" rel="noreferrer">A Deep Conjugate Direction Method for Iteratively Solving Linear Systems</a></h3>
+          <div class="paper-tags"><span class="pill">正式出版</span><span class="pill">Tier 1 / CCF-A</span><span class="pill">强相关</span></div>
+          <p class="paper-problem"><b>研究问题</b>利用数据分布改进共轭方向，使大规模 SPD 系统更快达到指定残差。</p>
+          <p><b>核心思路</b>CNN 近似逆算子作用并在每次迭代提供更优 search direction。</p>
+          <p><b>关键证据</b>论文在具有数百万自由度的离散 Poisson 问题上报告少量且与规模近似无关的迭代，并测试训练外系统。</p>
+          <p class="relation"><b>与 Alioth 的关系</b>同样把网络放进可迭代收敛的数值骨架，但学习的是动态 search direction，Alioth 生成可复用 V-cycle smoother。</p>
+          <details>
+            <summary>展开完整论文研究卡</summary>
+            <dl>
+              <dt>作者</dt><dd>Ayano Kaneda, Osman Akar, Jingyu Chen, Victoria Alicia Trevino Kala, David Hyde, Joseph Teran</dd>
+              <dt>此前局限</dt><dd>经典 CG 不利用问题分布，直接解网络难以稳定达到严格容差。</dd>
+              <dt>技术机制</dt><dd>保持 conjugate-direction 风格的迭代与残差推进，把网络作为方向生成器。</dd>
+              <dt>研究维度</dt><dd><span class="mini-pill">iterative solver</span><span class="mini-pill">learned search direction</span><span class="mini-pill">SPD</span><span class="mini-pill">Poisson</span><span class="mini-pill">size-independent iterations</span></dd>
+              <dt>证据边界</dt><dd>官方摘要；主要是 Poisson/CFD 类结构问题。</dd>
+              <dt>发表场所说明</dt><dd>ICML 是 CCF-A；论文代表学习每步 search direction 而非显式预条件器。</dd>
+              <dt>来源</dt><dd><a class="source-chip" href="https://proceedings.mlr.press/v202/kaneda23a.html" target="_blank" rel="noreferrer">S13</a></dd>
+            </dl>
+          </details>
+        </article>
+        <article class="paper-card" id="paper-P11" data-relevance="directly-related" data-year="2023" data-search="mg-gnn: multigrid graph neural networks for learning multilevel domain decomposition methods ali taghibakhshi, nicolas nytko, tareq uz zaman, scott maclachlan, luke olson, matthew west icml 联合优化 two-level ddm 的局部接口与粗层参数。 用多层图消息在 fine/coarse levels 间传递信息，同时生成 two-level ddm 参数。 mg-gnn 在图层级间上下采样，以接近谱半径的无监督损失学习接口与插值。 说明多层联合学习可能补足 alioth 只学 smoother 的表达性，但也增加模型、设置和验证复杂度。">
+          <div class="paper-topline"><span class="paper-id">P11</span><span>2023 · ICML</span></div>
+          <h3><a href="https://proceedings.mlr.press/v202/taghibakhshi23a.html" target="_blank" rel="noreferrer">MG-GNN: Multigrid Graph Neural Networks for Learning Multilevel Domain Decomposition Methods</a></h3>
+          <div class="paper-tags"><span class="pill">正式出版</span><span class="pill">Tier 1 / CCF-A</span><span class="pill">直接相关</span></div>
+          <p class="paper-problem"><b>研究问题</b>联合优化 two-level DDM 的局部接口与粗层参数。</p>
+          <p><b>核心思路</b>用多层图消息在 fine/coarse levels 间传递信息，同时生成 two-level DDM 参数。</p>
+          <p><b>关键证据</b>论文展示小问题训练到数量级更大的非结构网格，联合学习优于单组件和常见 hierarchical GNN。</p>
+          <p class="relation"><b>与 Alioth 的关系</b>说明多层联合学习可能补足 Alioth 只学 smoother 的表达性，但也增加模型、设置和验证复杂度。</p>
+          <details>
+            <summary>展开完整论文研究卡</summary>
+            <dl>
+              <dt>作者</dt><dd>Ali Taghibakhshi, Nicolas Nytko, Tareq Uz Zaman, Scott Maclachlan, Luke Olson, Matthew West</dd>
+              <dt>此前局限</dt><dd>单层学习难消除全局误差，平坦 GNN 难高效传递长程信息。</dd>
+              <dt>技术机制</dt><dd>MG-GNN 在图层级间上下采样，以接近谱半径的无监督损失学习接口与插值。</dd>
+              <dt>研究维度</dt><dd><span class="mini-pill">multilevel DDM</span><span class="mini-pill">MG-GNN</span><span class="mini-pill">learned interface and interpolation</span><span class="mini-pill">unstructured grid</span></dd>
+              <dt>证据边界</dt><dd>官方 proceedings 与论文片段；DDM 任务而非通用 AMG。</dd>
+              <dt>发表场所说明</dt><dd>ICML 是 CCF-A；论文代表从单层局部接口迈向多层组件联合生成。</dd>
+              <dt>来源</dt><dd><a class="source-chip" href="https://proceedings.mlr.press/v202/taghibakhshi23a.html" target="_blank" rel="noreferrer">S14</a></dd>
+            </dl>
+          </details>
+        </article>
+        <article class="paper-card" id="paper-P12" data-relevance="strongly-related" data-year="2023" data-search="neural-network preconditioners for solving the dirac equation in lattice gauge theory salvatore calì, daniel c. hackett, yin lin, phiala e. shanahan, brian xiao physical review d 加速临界附近 lattice dirac normal equation 的反复高精度求解。 用稀疏/稠密 cnn 构造三角预条件器，并把小体积训练模型转移到大体积。 网络输出一个或两个因子，pcg 通过三角应用使用；稀疏度控制每步成本。 给 alioth 一个重要警告：减少迭代不等于端到端更快；逐行多项式只有在应用成本足够低时才有优势。">
+          <div class="paper-topline"><span class="paper-id">P12</span><span>2023 · Physical Review D</span></div>
+          <h3><a href="https://journals.aps.org/prd/abstract/10.1103/PhysRevD.107.034508" target="_blank" rel="noreferrer">Neural-network Preconditioners for Solving the Dirac Equation in Lattice Gauge Theory</a></h3>
+          <div class="paper-tags"><span class="pill">正式出版</span><span class="pill">Tier 2 / field flagship journal</span><span class="pill">强相关</span></div>
+          <p class="paper-problem"><b>研究问题</b>加速临界附近 lattice Dirac normal equation 的反复高精度求解。</p>
+          <p><b>核心思路</b>用稀疏/稠密 CNN 构造三角预条件器，并把小体积训练模型转移到大体积。</p>
+          <p><b>关键证据</b>PRD 报告迭代改善约2.9–5.8倍；计入复数运算后只有稀疏单预条件器 ROA 约1.2超过未预条件，揭示强烈成本权衡。</p>
+          <p class="relation"><b>与 Alioth 的关系</b>给 Alioth 一个重要警告：减少迭代不等于端到端更快；逐行多项式只有在应用成本足够低时才有优势。</p>
+          <details>
+            <summary>展开完整论文研究卡</summary>
+            <dl>
+              <dt>作者</dt><dd>Salvatore Calì, Daniel C. Hackett, Yin Lin, Phiala E. Shanahan, Brian Xiao</dd>
+              <dt>此前局限</dt><dd>条件数随物理参数恶化，传统 even-odd/IC 预条件成本与效果受限。</dd>
+              <dt>技术机制</dt><dd>网络输出一个或两个因子，PCG 通过三角应用使用；稀疏度控制每步成本。</dd>
+              <dt>研究维度</dt><dd><span class="mini-pill">CG</span><span class="mini-pill">neural triangular preconditioner</span><span class="mini-pill">lattice field theory</span><span class="mini-pill">volume transfer</span><span class="mini-pill">application cost</span></dd>
+              <dt>证据边界</dt><dd>已读 APS 页面与开放 PDF 结果片段；专门的 Schwinger model，不能推到一般 SPD。</dd>
+              <dt>发表场所说明</dt><dd>PRD 是高能物理权威期刊；该论文以真实领域算子展示神经因子预条件的体积迁移与成本权衡。</dd>
+              <dt>来源</dt><dd><a class="source-chip" href="https://journals.aps.org/prd/abstract/10.1103/PhysRevD.107.034508" target="_blank" rel="noreferrer">S15</a></dd>
+            </dl>
+          </details>
+        </article>
+        <article class="paper-card" id="paper-P13" data-relevance="directly-related" data-year="2024" data-search="ugrid: an efficient-and-rigorous neural multigrid solver for linear pdes xi han, fei hou, hong qin icml 让数据驱动 pde solver 同时具有高精度、泛化与数学收敛/正确性论证。 原则性组合 u-net 与 multigrid，并设计更稳定的 residual loss。 神经网络与多层校正交织，在论文设定和假设下给出 convergence/correctness 证明。 ugrid 走条件内理论保证；alioth 走运行时递推残差与失败回退，两者的可信合同不同且互补。">
+          <div class="paper-topline"><span class="paper-id">P13</span><span>2024 · ICML</span></div>
+          <h3><a href="https://proceedings.mlr.press/v235/han24a.html" target="_blank" rel="noreferrer">UGrid: An Efficient-And-Rigorous Neural Multigrid Solver for Linear PDEs</a></h3>
+          <div class="paper-tags"><span class="pill">正式出版</span><span class="pill">Tier 1 / CCF-A</span><span class="pill">直接相关</span></div>
+          <p class="paper-problem"><b>研究问题</b>让数据驱动 PDE solver 同时具有高精度、泛化与数学收敛/正确性论证。</p>
+          <p><b>核心思路</b>原则性组合 U-Net 与 multigrid，并设计更稳定的 residual loss。</p>
+          <p><b>关键证据</b>官方 proceedings 报告对多种输入几何、数值与线性 PDE 的高精度和泛化。</p>
+          <p class="relation"><b>与 Alioth 的关系</b>UGrid 走条件内理论保证；Alioth 走运行时递推残差与失败回退，两者的可信合同不同且互补。</p>
+          <details>
+            <summary>展开完整论文研究卡</summary>
+            <dl>
+              <dt>作者</dt><dd>Xi Han, Fei Hou, Hong Qin</dd>
+              <dt>此前局限</dt><dd>纯神经求解器通常没有高精度收敛保证，经典方法又不能利用数据。</dd>
+              <dt>技术机制</dt><dd>神经网络与多层校正交织，在论文设定和假设下给出 convergence/correctness 证明。</dd>
+              <dt>研究维度</dt><dd><span class="mini-pill">neural multigrid</span><span class="mini-pill">U-Net</span><span class="mini-pill">convergence proof</span><span class="mini-pill">residual loss</span><span class="mini-pill">multi-PDE generalization</span></dd>
+              <dt>证据边界</dt><dd>本轮保守采用官方摘要，不把具体保证外推到任意 SPD。</dd>
+              <dt>发表场所说明</dt><dd>ICML 是 CCF-A；论文把 convergence/correctness 明确提升为神经 multigrid 的中心问题。</dd>
+              <dt>来源</dt><dd><a class="source-chip" href="https://proceedings.mlr.press/v235/han24a.html" target="_blank" rel="noreferrer">S16</a></dd>
+            </dl>
+          </details>
+        </article>
+        <article class="paper-card" id="paper-P14" data-relevance="directly-related" data-year="2024" data-search="neural operators meet conjugate gradients: the fcg-no method for efficient pde solving alexander rudikov, vladimir fanaskov, ekaterina muravleva, yuri m. laevsky, ivan oseledets icml 克服神经 pde solver 精度不足，同时保留跨分辨率快速推理。 训练 discretization-invariant neural operator 作为 fcg 的非线性预条件器。 神经算子把 residual 映射为 correction；fcg 构建外层 krylov 子空间并迭代到精度。 与 alioth 都使用 fcg 承担外层高精度；区别是 fcg-no 每步调用更强的 residual-to-correction 模型。">
+          <div class="paper-topline"><span class="paper-id">P14</span><span>2024 · ICML</span></div>
+          <h3><a href="https://proceedings.mlr.press/v235/rudikov24a.html" target="_blank" rel="noreferrer">Neural Operators Meet Conjugate Gradients: The FCG-NO Method for Efficient PDE Solving</a></h3>
+          <div class="paper-tags"><span class="pill">正式出版</span><span class="pill">Tier 1 / CCF-A</span><span class="pill">直接相关</span></div>
+          <p class="paper-problem"><b>研究问题</b>克服神经 PDE solver 精度不足，同时保留跨分辨率快速推理。</p>
+          <p><b>核心思路</b>训练 discretization-invariant neural operator 作为 FCG 的非线性预条件器。</p>
+          <p><b>关键证据</b>ICML 论文报告优于所测经典预条件器，并能把低分辨率训练模型复用于高分辨率。</p>
+          <p class="relation"><b>与 Alioth 的关系</b>与 Alioth 都使用 FCG 承担外层高精度；区别是 FCG-NO 每步调用更强的 residual-to-correction 模型。</p>
+          <details>
+            <summary>展开完整论文研究卡</summary>
+            <dl>
+              <dt>作者</dt><dd>Alexander Rudikov, Vladimir Fanaskov, Ekaterina Muravleva, Yuri M. Laevsky, Ivan Oseledets</dd>
+              <dt>此前局限</dt><dd>普通 CG 对 nonlinear/changing preconditioner 不安全，端到端神经解止步于近似精度。</dd>
+              <dt>技术机制</dt><dd>神经算子把 residual 映射为 correction；FCG 构建外层 Krylov 子空间并迭代到精度。</dd>
+              <dt>研究维度</dt><dd><span class="mini-pill">FCG</span><span class="mini-pill">neural operator preconditioner</span><span class="mini-pill">nonlinear preconditioner</span><span class="mini-pill">resolution transfer</span><span class="mini-pill">O(N)</span></dd>
+              <dt>证据边界</dt><dd>官方 proceedings；未证明跨任意工业矩阵或 Alioth 式 fallback。</dd>
+              <dt>发表场所说明</dt><dd>ICML 是 CCF-A；论文确立 nonlinear neural operator 与 flexible CG 的通用组合。</dd>
+              <dt>来源</dt><dd><a class="source-chip" href="https://proceedings.mlr.press/v235/rudikov24a.html" target="_blank" rel="noreferrer">S17</a></dd>
+            </dl>
+          </details>
+        </article>
+        <article class="paper-card" id="paper-P15" data-relevance="strongly-related" data-year="2024" data-search="learning to relax: setting solver parameters across a sequence of linear system instances mikhail khodak, edmond chow, maria-florina balcan, ameet talwalkar iclr 无需额外矩阵计算，在相关系统序列中逐步学到接近最优的 relaxation 参数。 把 sor 的 omega 选择视为 bandit，以迭代数作为唯一反馈。 非上下文 bandit 逼近最佳固定参数；有结构信息时 contextual bandit 逼近 instance-optimal policy。 是 alioth 博客自适应层的重要邻近范式：无需大模型，可从当前模拟自身反馈选择经典配置；对公开 v0 代码则是补充路线，因此归为强相关。">
+          <div class="paper-topline"><span class="paper-id">P15</span><span>2024 · ICLR</span></div>
+          <h3><a href="https://proceedings.iclr.cc/paper_files/paper/2024/hash/8fcc228e94aa7e4773a27c6c2d886243-Abstract-Conference.html" target="_blank" rel="noreferrer">Learning to Relax: Setting Solver Parameters Across a Sequence of Linear System Instances</a></h3>
+          <div class="paper-tags"><span class="pill">正式出版</span><span class="pill">Tier 1 / CCF-A</span><span class="pill">强相关</span></div>
+          <p class="paper-problem"><b>研究问题</b>无需额外矩阵计算，在相关系统序列中逐步学到接近最优的 relaxation 参数。</p>
+          <p><b>核心思路</b>把 SOR 的 omega 选择视为 bandit，以迭代数作为唯一反馈。</p>
+          <p><b>关键证据</b>论文给出 regret/end-to-end guarantees，并在热方程等序列实验中验证在线选择。</p>
+          <p class="relation"><b>与 Alioth 的关系</b>是 Alioth 博客自适应层的重要邻近范式：无需大模型，可从当前模拟自身反馈选择经典配置；对公开 v0 代码则是补充路线，因此归为强相关。</p>
+          <details>
+            <summary>展开完整论文研究卡</summary>
+            <dl>
+              <dt>作者</dt><dd>Mikhail Khodak, Edmond Chow, Maria-Florina Balcan, Ameet Talwalkar</dd>
+              <dt>此前局限</dt><dd>实际 solver 常使用次优启发式，离线训练成本可能高于节省。</dd>
+              <dt>技术机制</dt><dd>非上下文 bandit 逼近最佳固定参数；有结构信息时 contextual bandit 逼近 instance-optimal policy。</dd>
+              <dt>研究维度</dt><dd><span class="mini-pill">online learning</span><span class="mini-pill">SOR parameter</span><span class="mini-pill">repeated systems</span><span class="mini-pill">bandit guarantee</span><span class="mini-pill">high precision</span></dd>
+              <dt>证据边界</dt><dd>正式 ICLR；理论与实验聚焦 SOR/SSOR 参数，不等价于学习逐行多项式。</dd>
+              <dt>发表场所说明</dt><dd>ICLR 是 CCF-A；论文为反复线性系统的在线 solver tuning 提供学习理论。</dd>
+              <dt>来源</dt><dd><a class="source-chip" href="https://proceedings.iclr.cc/paper_files/paper/2024/hash/8fcc228e94aa7e4773a27c6c2d886243-Abstract-Conference.html" target="_blank" rel="noreferrer">S18</a></dd>
+            </dl>
+          </details>
+        </article>
+        <article class="paper-card" id="paper-P16" data-relevance="strongly-related" data-year="2024" data-search="multigrid-augmented deep learning preconditioners for the helmholtz equation using compact implicit layers bar lerer, ido ben-yair, eran treister siam journal on scientific computing 让 helmholtz neural preconditioner 对更大且未见尺寸保持全局信息和效率。 在 multilevel u-net 的最粗层加入可逆 convolution implicit layer，并采用 multiscale training。 coarsest-grid kernel inversion提供全局校正，encoder–solver 条件化介质和 rhs。 表明强表达模型必须显式解决全局视野和规模成本；alioth 依赖 amg coarse correction 而不让网络承担全局传播。">
+          <div class="paper-topline"><span class="paper-id">P16</span><span>2024 · SIAM Journal on Scientific Computing</span></div>
+          <h3><a href="https://epubs.siam.org/doi/full/10.1137/23M1583302" target="_blank" rel="noreferrer">Multigrid-Augmented Deep Learning Preconditioners for the Helmholtz Equation Using Compact Implicit Layers</a></h3>
+          <div class="paper-tags"><span class="pill">正式出版</span><span class="pill">Tier 2 / flagship scientific-computing journal</span><span class="pill">强相关</span></div>
+          <p class="paper-problem"><b>研究问题</b>让 Helmholtz neural preconditioner 对更大且未见尺寸保持全局信息和效率。</p>
+          <p><b>核心思路</b>在 multilevel U-Net 的最粗层加入可逆 convolution implicit layer，并采用 multiscale training。</p>
+          <p><b>关键证据</b>SISC 报告相对前作减少参数/时间、改善收敛，并扩展到训练未见的问题尺寸。</p>
+          <p class="relation"><b>与 Alioth 的关系</b>表明强表达模型必须显式解决全局视野和规模成本；Alioth 依赖 AMG coarse correction 而不让网络承担全局传播。</p>
+          <details>
+            <summary>展开完整论文研究卡</summary>
+            <dl>
+              <dt>作者</dt><dd>Bar Lerer, Ido Ben-Yair, Eran Treister</dd>
+              <dt>此前局限</dt><dd>普通 U-Net 的有限 receptive field、参数量和推理成本限制尺度泛化。</dd>
+              <dt>技术机制</dt><dd>coarsest-grid kernel inversion提供全局校正，encoder–solver 条件化介质和 RHS。</dd>
+              <dt>研究维度</dt><dd><span class="mini-pill">Helmholtz</span><span class="mini-pill">implicit layer</span><span class="mini-pill">multiscale training</span><span class="mini-pill">multiple RHS</span><span class="mini-pill">scalability</span></dd>
+              <dt>证据边界</dt><dd>publisher full page；二维高波数 Helmholtz 专用。</dd>
+              <dt>发表场所说明</dt><dd>SISC 是领域旗舰；论文正面修正 neural preconditioner 的 receptive-field、规模与成本瓶颈。</dd>
+              <dt>来源</dt><dd><a class="source-chip" href="https://epubs.siam.org/doi/full/10.1137/23M1583302" target="_blank" rel="noreferrer">S19</a></dd>
+            </dl>
+          </details>
+        </article>
+        <article class="paper-card" id="paper-P17" data-relevance="strongly-related" data-year="2024" data-search="reducing operator complexity of galerkin coarse-grid operators with machine learning ru huang, kai chang, huan he, ruipeng li, yuanzhe xi siam journal on scientific computing 降低 galerkin coarse-grid operator 的复杂度，同时维持 multigrid 收敛。 用神经网络与 multigrid eigenproblem 的 smooth test vectors 学习 non-galerkin coarse operators。 以谱等价理论约束学习稀疏化后的 coarse operator。 alioth 目前没有解决 coarse-grid operator complexity；这是 gpu 端到端扩展不可回避的互补方向。">
+          <div class="paper-topline"><span class="paper-id">P17</span><span>2024 · SIAM Journal on Scientific Computing</span></div>
+          <h3><a href="https://epubs.siam.org/doi/10.1137/23M1583533" target="_blank" rel="noreferrer">Reducing Operator Complexity of Galerkin Coarse-grid Operators with Machine Learning</a></h3>
+          <div class="paper-tags"><span class="pill">正式出版</span><span class="pill">Tier 2 / flagship scientific-computing journal</span><span class="pill">强相关</span></div>
+          <p class="paper-problem"><b>研究问题</b>降低 Galerkin coarse-grid operator 的复杂度，同时维持 multigrid 收敛。</p>
+          <p><b>核心思路</b>用神经网络与 multigrid eigenproblem 的 smooth test vectors 学习 non-Galerkin coarse operators。</p>
+          <p><b>关键证据</b>SISC 在旋转各向异性 Laplacian 和线弹性上比较既有 non-Galerkin 方法，并提供可复现实验代码。</p>
+          <p class="relation"><b>与 Alioth 的关系</b>Alioth 目前没有解决 coarse-grid operator complexity；这是 GPU 端到端扩展不可回避的互补方向。</p>
+          <details>
+            <summary>展开完整论文研究卡</summary>
+            <dl>
+              <dt>作者</dt><dd>Ru Huang, Kai Chang, Huan He, Ruipeng Li, Yuanzhe Xi</dd>
+              <dt>此前局限</dt><dd>粗层 fill-in 增加内存、通信和 GPU 粗层成本。</dd>
+              <dt>技术机制</dt><dd>以谱等价理论约束学习稀疏化后的 coarse operator。</dd>
+              <dt>研究维度</dt><dd><span class="mini-pill">AMG</span><span class="mini-pill">learned coarse operator</span><span class="mini-pill">operator complexity</span><span class="mini-pill">spectral equivalence</span><span class="mini-pill">reproducibility</span></dd>
+              <dt>证据边界</dt><dd>publisher 摘要、元数据与可复现仓库已核验。</dd>
+              <dt>发表场所说明</dt><dd>SISC 是领域旗舰，且论文获 SIAM Reproducibility Badge；它处理 AMG 的粗层稠密化/通信成本。</dd>
+              <dt>来源</dt><dd><a class="source-chip" href="https://epubs.siam.org/doi/10.1137/23M1583533" target="_blank" rel="noreferrer">S20</a></dd>
+            </dl>
+          </details>
+        </article>
+        <article class="paper-card" id="paper-P18" data-relevance="directly-related" data-year="2024" data-search="blending neural operators and relaxation methods in pde numerical solvers enrui zhang, adar kahana, alena kopaničáková, eli turkel, rishikesh ranade, jay pathak, george em karniadakis nature machine intelligence 利用 neural operator 与 relaxation 对不同频率误差的互补性实现可扩展混合 solver。 交替 deeponet 与经典 relaxation，平衡不同 eigenmodes 的收敛。 hints 可作为独立迭代器或 krylov preconditioner，并扩展到多维/多几何 pde。 同属‘网络做擅长频段、经典方法保证收尾’；alioth 的网络输出 solver coefficients 而非直接 correction。">
+          <div class="paper-topline"><span class="paper-id">P18</span><span>2024 · Nature Machine Intelligence</span></div>
+          <h3><a href="https://www.nature.com/articles/s42256-024-00910-x" target="_blank" rel="noreferrer">Blending Neural Operators and Relaxation Methods in PDE Numerical Solvers</a></h3>
+          <div class="paper-tags"><span class="pill">正式出版</span><span class="pill">Tier 2 / cross-disciplinary flagship journal</span><span class="pill">直接相关</span></div>
+          <p class="paper-problem"><b>研究问题</b>利用 neural operator 与 relaxation 对不同频率误差的互补性实现可扩展混合 solver。</p>
+          <p><b>核心思路</b>交替 DeepONet 与经典 relaxation，平衡不同 eigenmodes 的收敛。</p>
+          <p><b>关键证据</b>论文展示1D/2D/3D Poisson 与 Helmholtz、多种几何和大规模案例，并开放代码与数据。</p>
+          <p class="relation"><b>与 Alioth 的关系</b>同属‘网络做擅长频段、经典方法保证收尾’；Alioth 的网络输出 solver coefficients 而非直接 correction。</p>
+          <details>
+            <summary>展开完整论文研究卡</summary>
+            <dl>
+              <dt>作者</dt><dd>Enrui Zhang, Adar Kahana, Alena Kopaničáková, Eli Turkel, Rishikesh Ranade, Jay Pathak, George Em Karniadakis</dd>
+              <dt>此前局限</dt><dd>神经网络难高频，relaxation 又在中低频停滞。</dd>
+              <dt>技术机制</dt><dd>HINTS 可作为独立迭代器或 Krylov preconditioner，并扩展到多维/多几何 PDE。</dd>
+              <dt>研究维度</dt><dd><span class="mini-pill">hybrid solver</span><span class="mini-pill">neural operator</span><span class="mini-pill">relaxation</span><span class="mini-pill">spectral complementarity</span><span class="mini-pill">large-scale PDE</span></dd>
+              <dt>证据边界</dt><dd>Nature 正式页面；泛化仍在论文测试 PDE/几何内。</dd>
+              <dt>发表场所说明</dt><dd>NMI 是高影响力机器学习期刊；HINTS 明确研究怎样让神经网络和传统迭代分别处理不同类型的误差。</dd>
+              <dt>来源</dt><dd><a class="source-chip" href="https://www.nature.com/articles/s42256-024-00910-x" target="_blank" rel="noreferrer">S21</a></dd>
+            </dl>
+          </details>
+        </article>
+        <article class="paper-card" id="paper-P19" data-relevance="directly-related" data-year="2025" data-search="graph neural preconditioners for iterative solutions of sparse linear systems jie chen iclr 为多来源、难解、非 spd 稀疏系统构造通用 neural preconditioner。 直接学习非线性映射 m(b)≈a^{-1}b，并由 flexible gmres 使用。 对每个矩阵训练 gnn 预条件器，避免显式固定线性因子。 共享通用稀疏矩阵目标；gnp 每矩阵训练而 alioth 主张单权重零样本，这正是设置成本与迁移能力的关键分叉。">
+          <div class="paper-topline"><span class="paper-id">P19</span><span>2025 · ICLR</span></div>
+          <h3><a href="https://proceedings.iclr.cc/paper_files/paper/2025/hash/3bb7e33e4da1fd19ebc6f0899e45a9dc-Abstract-Conference.html" target="_blank" rel="noreferrer">Graph Neural Preconditioners for Iterative Solutions of Sparse Linear Systems</a></h3>
+          <div class="paper-tags"><span class="pill">正式出版</span><span class="pill">Tier 1 / CCF-A</span><span class="pill">直接相关</span></div>
+          <p class="paper-problem"><b>研究问题</b>为多来源、难解、非 SPD 稀疏系统构造通用 neural preconditioner。</p>
+          <p><b>核心思路</b>直接学习非线性映射 M(b)≈A^{-1}b，并由 flexible GMRES 使用。</p>
+          <p><b>关键证据</b>ICLR 在800多个矩阵上报告构建时间更可预测且常短于 ILU/AMG，应用快于 inner–outer GMRES。</p>
+          <p class="relation"><b>与 Alioth 的关系</b>共享通用稀疏矩阵目标；GNP 每矩阵训练而 Alioth 主张单权重零样本，这正是设置成本与迁移能力的关键分叉。</p>
+          <details>
+            <summary>展开完整论文研究卡</summary>
+            <dl>
+              <dt>作者</dt><dd>Jie Chen</dd>
+              <dt>此前局限</dt><dd>ILU/AMG 构建时间波动大，方程族网络泛化窄。</dd>
+              <dt>技术机制</dt><dd>对每个矩阵训练 GNN 预条件器，避免显式固定线性因子。</dd>
+              <dt>研究维度</dt><dd><span class="mini-pill">general sparse systems</span><span class="mini-pill">GNN nonlinear preconditioner</span><span class="mini-pill">FGMRES</span><span class="mini-pill">per-matrix training</span><span class="mini-pill">predictable setup</span></dd>
+              <dt>证据边界</dt><dd>官方 proceedings；主要是非 SPD，和 Alioth 的116 SPD不是已确认重合集。</dd>
+              <dt>发表场所说明</dt><dd>ICLR 是 CCF-A；论文以800多个通用稀疏矩阵挑战方程专用 learned solver。</dd>
+              <dt>来源</dt><dd><a class="source-chip" href="https://proceedings.iclr.cc/paper_files/paper/2025/hash/3bb7e33e4da1fd19ebc6f0899e45a9dc-Abstract-Conference.html" target="_blank" rel="noreferrer">S22</a></dd>
+            </dl>
+          </details>
+        </article>
+        <article class="paper-card" id="paper-P20" data-relevance="contextually-related" data-year="2025" data-search="schwarz–schur involution: lightspeed differentiable sparse linear solvers yu wang, mazdak abulnaga, yaël balbastre, bruce fischl icml 让可靠 direct sparse solve 足够快且可微，能进入机器学习流水线。 递归把稀疏 laplacian 浓缩为成批小型 dense dirichlet-to-neumann 矩阵，并用 gpu blas 合并。 schwarz/schur 层级分解转化为批量小矩阵求逆，避免学习。 提醒 alioth 必须与现代 gpu 数值基线比较，而不能只对 pyamg/amgx 默认配置。">
+          <div class="paper-topline"><span class="paper-id">P20</span><span>2025 · ICML</span></div>
+          <h3><a href="https://proceedings.mlr.press/v267/wang25a.html" target="_blank" rel="noreferrer">Schwarz–Schur Involution: Lightspeed Differentiable Sparse Linear Solvers</a></h3>
+          <div class="paper-tags"><span class="pill">正式出版</span><span class="pill">Tier 1 / CCF-A</span><span class="pill">重要背景</span></div>
+          <p class="paper-problem"><b>研究问题</b>让可靠 direct sparse solve 足够快且可微，能进入机器学习流水线。</p>
+          <p><b>核心思路</b>递归把稀疏 Laplacian 浓缩为成批小型 dense Dirichlet-to-Neumann 矩阵，并用 GPU BLAS 合并。</p>
+          <p><b>关键证据</b>ICML 报告直接稀疏求解最高三个数量级加速，并作为 AI PDE solver 的 strong zero-shot baseline。</p>
+          <p class="relation"><b>与 Alioth 的关系</b>提醒 Alioth 必须与现代 GPU 数值基线比较，而不能只对 PyAMG/AmgX 默认配置。</p>
+          <details>
+            <summary>展开完整论文研究卡</summary>
+            <dl>
+              <dt>作者</dt><dd>Yu Wang, Mazdak Abulnaga, Yaël Balbastre, Bruce Fischl</dd>
+              <dt>此前局限</dt><dd>迭代解法作为可微模块不稳定，传统直接法又被认为太慢。</dd>
+              <dt>技术机制</dt><dd>Schwarz/Schur 层级分解转化为批量小矩阵求逆，避免学习。</dd>
+              <dt>研究维度</dt><dd><span class="mini-pill">direct sparse solver</span><span class="mini-pill">Schur complement</span><span class="mini-pill">GPU dense BLAS</span><span class="mini-pill">zero-shot baseline</span><span class="mini-pill">differentiability</span></dd>
+              <dt>证据边界</dt><dd>官方摘要；适用矩阵结构与 Alioth 通用 SPD 接口不同。</dd>
+              <dt>发表场所说明</dt><dd>ICML 是 CCF-A；论文给出不依赖学习的 GPU 直接求解强基线。</dd>
+              <dt>来源</dt><dd><a class="source-chip" href="https://proceedings.mlr.press/v267/wang25a.html" target="_blank" rel="noreferrer">S23</a></dd>
+            </dl>
+          </details>
+        </article>
+        <article class="paper-card" id="paper-P21" data-relevance="directly-related" data-year="2025" data-search="symmap: improving computational efficiency in linear solvers through symbolic preconditioning hong wang, jie wang, minghao ma, haoran shao, haoyang liu neurips 按实例选择预条件参数，同时避免神经模型推理成本和不可解释性。 用神经网络搜索离散表达式空间，最后部署简洁符号公式预测最优参数。 训练阶段神经搜索，推理阶段只执行 symbolic expression。 给 alioth 的极小 rownet 一条更激进替代：把逐行规律蒸馏成可解释、零神经开销的公式。">
+          <div class="paper-topline"><span class="paper-id">P21</span><span>2025 · NeurIPS</span></div>
+          <h3><a href="https://proceedings.neurips.cc/paper_files/paper/2025/hash/5c17c18c1dea5a0c00907824bbb80449-Abstract-Conference.html" target="_blank" rel="noreferrer">SymMaP: Improving Computational Efficiency in Linear Solvers through Symbolic Preconditioning</a></h3>
+          <div class="paper-tags"><span class="pill">正式出版</span><span class="pill">Tier 1 / CCF-A</span><span class="pill">直接相关</span></div>
+          <p class="paper-problem"><b>研究问题</b>按实例选择预条件参数，同时避免神经模型推理成本和不可解释性。</p>
+          <p><b>核心思路</b>用神经网络搜索离散表达式空间，最后部署简洁符号公式预测最优参数。</p>
+          <p><b>关键证据</b>NeurIPS 官方摘要报告在多类 benchmark 上持续优于传统参数策略。</p>
+          <p class="relation"><b>与 Alioth 的关系</b>给 Alioth 的极小 RowNet 一条更激进替代：把逐行规律蒸馏成可解释、零神经开销的公式。</p>
+          <details>
+            <summary>展开完整论文研究卡</summary>
+            <dl>
+              <dt>作者</dt><dd>Hong Wang, Jie Wang, Minghao Ma, Haoran Shao, Haoyang Liu</dd>
+              <dt>此前局限</dt><dd>固定参数忽略实例差异，直接 ML predictor 部署成本高且难审查。</dd>
+              <dt>技术机制</dt><dd>训练阶段神经搜索，推理阶段只执行 symbolic expression。</dd>
+              <dt>研究维度</dt><dd><span class="mini-pill">symbolic preconditioning</span><span class="mini-pill">parameter prediction</span><span class="mini-pill">interpretability</span><span class="mini-pill">low inference cost</span></dd>
+              <dt>证据边界</dt><dd>本轮只依据官方摘要，不补写未核验 benchmark 细节。</dd>
+              <dt>发表场所说明</dt><dd>NeurIPS 是 CCF-A；论文代表把神经搜索蒸馏成低成本可解释公式。</dd>
+              <dt>来源</dt><dd><a class="source-chip" href="https://proceedings.neurips.cc/paper_files/paper/2025/hash/5c17c18c1dea5a0c00907824bbb80449-Abstract-Conference.html" target="_blank" rel="noreferrer">S24</a></dd>
+            </dl>
+          </details>
+        </article>
+        <article class="paper-card" id="paper-P22" data-relevance="directly-related" data-year="2025" data-search="learning sparse approximate inverse preconditioners for conjugate gradient solvers on gpus zhehao li, kangbo lyu, yixuan li, tao du, ligang liu neurips 避免 learned incomplete factorization 的三角求解瓶颈，获得 gpu 实际加速。 让 gnn 生成 sparse approximate inverse，使每个 cg step 只需两次 sparse matrix–vector multiply。 固定稀疏模式近似逆 + 对矩阵整体缩放不敏感的训练损失。 最直接竞争：两者都面向 spd+cg+gpu；一个学显式 spai，一个学 amg 内逐行多项式 smoother。">
+          <div class="paper-topline"><span class="paper-id">P22</span><span>2025 · NeurIPS</span></div>
+          <h3><a href="https://proceedings.neurips.cc/paper_files/paper/2025/hash/23fcc63005ac1a6e460ec4e209d17607-Abstract-Conference.html" target="_blank" rel="noreferrer">Learning Sparse Approximate Inverse Preconditioners for Conjugate Gradient Solvers on GPUs</a></h3>
+          <div class="paper-tags"><span class="pill">正式出版</span><span class="pill">Tier 1 / CCF-A</span><span class="pill">直接相关</span></div>
+          <p class="paper-problem"><b>研究问题</b>避免 learned incomplete factorization 的三角求解瓶颈，获得 GPU 实际加速。</p>
+          <p><b>核心思路</b>让 GNN 生成 sparse approximate inverse，使每个 CG step 只需两次 sparse matrix–vector multiply。</p>
+          <p><b>关键证据</b>NeurIPS 报告三类 PDE 与一类合成数据上 GPU solve time 降低40%–53%。</p>
+          <p class="relation"><b>与 Alioth 的关系</b>最直接竞争：两者都面向 SPD+CG+GPU；一个学显式 SPAI，一个学 AMG 内逐行多项式 smoother。</p>
+          <details>
+            <summary>展开完整论文研究卡</summary>
+            <dl>
+              <dt>作者</dt><dd>Zhehao Li, Kangbo Lyu, Yixuan Li, Tao Du, Ligang Liu</dd>
+              <dt>此前局限</dt><dd>三角 solve 难并行，GNN 也难学习长程 factor dependencies。</dd>
+              <dt>技术机制</dt><dd>固定稀疏模式近似逆 + 对矩阵整体缩放不敏感的训练损失。</dd>
+              <dt>研究维度</dt><dd><span class="mini-pill">SPD</span><span class="mini-pill">CG</span><span class="mini-pill">learned SPAI</span><span class="mini-pill">GPU</span><span class="mini-pill">scale-invariant loss</span><span class="mini-pill">SpMV</span></dd>
+              <dt>证据边界</dt><dd>官方 proceedings；setup、矩阵集、容差和失败规则需统一后才可比较。</dd>
+              <dt>发表场所说明</dt><dd>NeurIPS 是 CCF-A；论文是 Alioth 最接近的 GPU-friendly learned preconditioner 对照。</dd>
+              <dt>来源</dt><dd><a class="source-chip" href="https://proceedings.neurips.cc/paper_files/paper/2025/hash/23fcc63005ac1a6e460ec4e209d17607-Abstract-Conference.html" target="_blank" rel="noreferrer">S25</a></dd>
+            </dl>
+          </details>
+        </article>
+        <article class="paper-card" id="paper-P23" data-relevance="directly-related" data-year="2026" data-search="convolutional neural network-driven preconditioners for conjugate gradients johannes sappl, viktor daropoulos, wolfgang rauch, matthias harders machine learning: science and technology 用 sparse cnn 为工程 pde 系统生成可扩展 preconditioner。 全卷积网络直接从 sparse system matrix 输出 cholesky-like preconditioner。 稀疏张量卷积维持局部性和任意尺寸，后处理保证可用于 cg。 为 alioth 提供重要公平性参照：学习法可能赢其他学习/局部因子，却仍输专用 amg；总时间比条件数或迭代数更关键。">
+          <div class="paper-topline"><span class="paper-id">P23</span><span>2026 · Machine Learning: Science and Technology</span></div>
+          <h3><a href="https://doi.org/10.1088/2632-2153/ae76ba" target="_blank" rel="noreferrer">Convolutional Neural Network-Driven Preconditioners for Conjugate Gradients</a></h3>
+          <div class="paper-tags"><span class="pill">正式出版</span><span class="pill">Tier 2 / AI-for-science specialty journal</span><span class="pill">直接相关</span></div>
+          <p class="paper-problem"><b>研究问题</b>用 sparse CNN 为工程 PDE 系统生成可扩展 preconditioner。</p>
+          <p><b>核心思路</b>全卷积网络直接从 sparse system matrix 输出 Cholesky-like preconditioner。</p>
+          <p><b>关键证据</b>两个工程 benchmark 上，总时间显著优于所有非 AMG 基线；AMG 仍更快，论文明确披露这一负结论。</p>
+          <p class="relation"><b>与 Alioth 的关系</b>为 Alioth 提供重要公平性参照：学习法可能赢其他学习/局部因子，却仍输专用 AMG；总时间比条件数或迭代数更关键。</p>
+          <details>
+            <summary>展开完整论文研究卡</summary>
+            <dl>
+              <dt>作者</dt><dd>Johannes Sappl, Viktor Daropoulos, Wolfgang Rauch, Matthias Harders</dd>
+              <dt>此前局限</dt><dd>因子质量、每步应用成本和 GPU 内存之间难同时最优。</dd>
+              <dt>技术机制</dt><dd>稀疏张量卷积维持局部性和任意尺寸，后处理保证可用于 CG。</dd>
+              <dt>研究维度</dt><dd><span class="mini-pill">SPD</span><span class="mini-pill">sparse CNN</span><span class="mini-pill">Cholesky-like preconditioner</span><span class="mini-pill">total solve time</span><span class="mini-pill">higher-resolution transfer</span></dd>
+              <dt>证据边界</dt><dd>publisher 正式页面；规则/结构输入和单 GPU 内存是限制。</dd>
+              <dt>发表场所说明</dt><dd>MLST 是 AI for Science 专业期刊；论文用强 AMG 基线检验 learned Cholesky-like preconditioner 的真实总时间。</dd>
+              <dt>来源</dt><dd><a class="source-chip" href="https://doi.org/10.1088/2632-2153/ae76ba" target="_blank" rel="noreferrer">S26</a></dd>
+            </dl>
+          </details>
+        </article>
+        <article class="paper-card" id="paper-P24" data-relevance="strongly-related" data-year="2026" data-search="nows: neural operator warm starts for accelerating iterative solvers mohammad sadegh eshaghi, cosmin anitescu, navid valizadeh, yizheng wang, xiaoying zhuang, timon rabczuk computer methods in applied mechanics and engineering 用神经 surrogate 加速经典 krylov，同时不改变已有离散和求解器基础设施。 只用 neural operator 生成高质量 initial guess，余下误差完全交给 cg/gmres。 fno/deeponet/vino 预测初值，经典 solver 按原收敛准则继续。 比 alioth 风险更低、侵入更小，但不能改善 solver 本身对难谱问题的每步收敛机制。">
+          <div class="paper-topline"><span class="paper-id">P24</span><span>2026 · Computer Methods in Applied Mechanics and Engineering</span></div>
+          <h3><a href="https://doi.org/10.1016/j.cma.2026.118989" target="_blank" rel="noreferrer">NOWS: Neural Operator Warm Starts for Accelerating Iterative Solvers</a></h3>
+          <div class="paper-tags"><span class="pill">正式出版</span><span class="pill">Tier 2 / computational mechanics flagship journal</span><span class="pill">强相关</span></div>
+          <p class="paper-problem"><b>研究问题</b>用神经 surrogate 加速经典 Krylov，同时不改变已有离散和求解器基础设施。</p>
+          <p><b>核心思路</b>只用 neural operator 生成高质量 initial guess，余下误差完全交给 CG/GMRES。</p>
+          <p><b>关键证据</b>CMAME 报告多类 PDE/离散中运行时间降低25%–90%，同时保留底层数值算法的稳定与收敛性质。</p>
+          <p class="relation"><b>与 Alioth 的关系</b>比 Alioth 风险更低、侵入更小，但不能改善 solver 本身对难谱问题的每步收敛机制。</p>
+          <details>
+            <summary>展开完整论文研究卡</summary>
+            <dl>
+              <dt>作者</dt><dd>Mohammad Sadegh Eshaghi, Cosmin Anitescu, Navid Valizadeh, Yizheng Wang, Xiaoying Zhuang, Timon Rabczuk</dd>
+              <dt>此前局限</dt><dd>端到端 surrogate 在 OOD 时不可靠，深度嵌入 solver 又改造成本高。</dd>
+              <dt>技术机制</dt><dd>FNO/DeepONet/VINO 预测初值，经典 solver 按原收敛准则继续。</dd>
+              <dt>研究维度</dt><dd><span class="mini-pill">neural operator</span><span class="mini-pill">warm start</span><span class="mini-pill">CG/GMRES</span><span class="mini-pill">solver-agnostic</span><span class="mini-pill">trustworthy hybrid</span></dd>
+              <dt>证据边界</dt><dd>publisher 与项目页已核验；作者报告的范围不自动覆盖通用工业矩阵。</dd>
+              <dt>发表场所说明</dt><dd>CMAME 是计算力学权威期刊；该文代表改动最小、正确性责任完全留给经典 solver 的 warm-start 路线。</dd>
+              <dt>来源</dt><dd><a class="source-chip" href="https://doi.org/10.1016/j.cma.2026.118989" target="_blank" rel="noreferrer">S27</a></dd>
+            </dl>
+          </details>
+        </article>
+        <article class="paper-card" id="paper-P25" data-relevance="strongly-related" data-year="2026" data-search="one-shot acceleration of transient pde solvers via online-learned preconditioners mikhail khodak, min ki jung, brian wynne, edmond chow, egemen kolemen computer physics communications 在一次 transient simulation 内利用反复 solver call 自动选择 preconditioner，且不付出预训练成本。 pcgbandit 用当前模拟的迭代/时间反馈，在经典 preconditioner portfolio 中在线选择。 问题规模无关的 bandit overhead，drop-in 替换 openfoam pcg 的配置选择层。 与 alioth 博客的 self-adaptation 最接近；对公开 v0 代码则是尚未实现的补充路线。它选择既有 preconditioner 而非生成新组件，但证据协议更贴近真实模拟。">
+          <div class="paper-topline"><span class="paper-id">P25</span><span>2026 · Computer Physics Communications</span></div>
+          <h3><a href="https://www.sciencedirect.com/science/article/pii/S0010465526002869" target="_blank" rel="noreferrer">One-Shot Acceleration of Transient PDE Solvers via Online-Learned Preconditioners</a></h3>
+          <div class="paper-tags"><span class="pill">已在线发表</span><span class="pill">Tier 2 / computational-physics software journal</span><span class="pill">强相关</span></div>
+          <p class="paper-problem"><b>研究问题</b>在一次 transient simulation 内利用反复 solver call 自动选择 preconditioner，且不付出预训练成本。</p>
+          <p><b>核心思路</b>PCGBandit 用当前模拟的迭代/时间反馈，在经典 preconditioner portfolio 中在线选择。</p>
+          <p><b>关键证据</b>四个 OpenFOAM 和两个 FreeMHD 问题上报告最高1.5倍 wall-clock reduction，且至少不慢于默认配置。</p>
+          <p class="relation"><b>与 Alioth 的关系</b>与 Alioth 博客的 self-adaptation 最接近；对公开 v0 代码则是尚未实现的补充路线。它选择既有 preconditioner 而非生成新组件，但证据协议更贴近真实模拟。</p>
+          <details>
+            <summary>展开完整论文研究卡</summary>
+            <dl>
+              <dt>作者</dt><dd>Mikhail Khodak, Min Ki Jung, Brian Wynne, Edmond Chow, Egemen Kolemen</dd>
+              <dt>此前局限</dt><dd>离线神经训练需要昂贵模拟数据，固定配置不能利用时间序列反馈。</dd>
+              <dt>技术机制</dt><dd>问题规模无关的 bandit overhead，drop-in 替换 OpenFOAM PCG 的配置选择层。</dd>
+              <dt>研究维度</dt><dd><span class="mini-pill">online bandit</span><span class="mini-pill">preconditioner selection</span><span class="mini-pill">OpenFOAM</span><span class="mini-pill">repeated SPD systems</span><span class="mini-pill">wall-clock feedback</span></dd>
+              <dt>证据边界</dt><dd>publisher online-first 页面；期刊卷期为2026年10月，当前有 DOI/文章号。</dd>
+              <dt>发表场所说明</dt><dd>CPC 是计算物理软件与方法权威期刊；该文把在线 preconditioner 选择直接集成 OpenFOAM/FreeMHD。</dd>
+              <dt>来源</dt><dd><a class="source-chip" href="https://www.sciencedirect.com/science/article/pii/S0010465526002869" target="_blank" rel="noreferrer">S28</a></dd>
+            </dl>
+          </details>
+        </article></div>
+    </div></section>
+    <section class="section" id="project-directions"><span id="potential-solution-space"></span><div class="section-head"><div class="section-no">06</div><div><div class="eyebrow">Directions for the Project</div><h2>从现有不足出发，哪些方向适合 Alioth</h2><p>这里同时说明学术成熟度和项目匹配度。“值得尝试”不等于已有共识；“不符合”也不是否定该方法，而是说明它与 Alioth 当前的轻量、跨矩阵和经典算法保底目标不一致。</p></div></div><div class="content portfolio-grid"><section class="portfolio-group" data-project-fit="already-doing"><h3>Alioth 已经在做</h3>
+          <article class="portfolio-card" data-direction-status="existing">
+            <div class="portfolio-meta"><span>已有研究</span><span class="problem-pill">Q1</span><span class="problem-pill">Q3</span><span class="problem-pill">Q4</span><span class="problem-pill">Q5</span></div>
+            <h4>用小网络生成平滑系数，再由经典迭代保证最终精度</h4><p>公开实现已经采用逐行局部特征、轻量 RowNet、多项式平滑和 FCG 外层迭代。</p>
+            <p><b>为什么这样判断</b>这条路线同时符合 Alioth 的轻量、GPU 友好、跨矩阵和高精度目标，是当前项目的主体，不需要改换研究方向。</p>
+            <p class="next-step"><b>下一步</b>重点补齐严格隔离测试、完整运行时间、失败率与传统强基线，而不是继续扩大网络。</p>
+          </article>
+          <article class="portfolio-card" data-direction-status="existing">
+            <div class="portfolio-meta"><span>已有研究</span><span class="problem-pill">Q3</span><span class="problem-pill">Q6</span></div>
+            <h4>检查学习配置是否可信，并在必要时切换到备用方案</h4><p>公开实现会检查是否达到求解要求，并在学习配置没有达到目标时尝试传统配置。</p>
+            <p><b>为什么这样判断</b>它与 Alioth 保留经典求解器控制权的设计一致，也是把学习方法用于工程环境的重要基础。</p>
+            <p class="next-step"><b>下一步</b>把错误接受、错误拒绝、切换次数、救回率和额外时间作为一组固定指标公开报告。</p>
+          </article></section><section class="portfolio-group" data-project-fit="worth-trying"><h3>值得进一步尝试</h3>
+          <article class="portfolio-card" data-direction-status="hypothesized">
+            <div class="portfolio-meta"><span>根据现有问题推测</span><span class="problem-pill">Q2</span><span class="problem-pill">Q6</span></div>
+            <h4>在逐行局部特征之外加入少量整体矩阵难度信息</h4><p>现有局部特征便宜且容易跨尺寸使用，但可能看不到整个矩阵的连接结构和最难消除的误差。</p>
+            <p><b>为什么这样判断</b>只增加少量随机探测或全局统计，有机会补足局部视野，同时不破坏小模型和低准备成本的优势。</p>
+            <p class="next-step"><b>下一步</b>保持模型参数量近似不变，对比仅局部特征、仅整体统计和两者结合三种方案，并使用跨来源盲测。</p>
+          </article>
+          <article class="portfolio-card" data-direction-status="emerging">
+            <div class="portfolio-meta"><span>少量工作开始探索</span><span class="problem-pill">Q4</span><span class="problem-pill">Q5</span><span class="problem-pill">Q6</span></div>
+            <h4>让在线选择同时考虑 Alioth 配置和传统配置</h4><p>P15 与 P25 表明，连续仿真中可以根据真实运行反馈逐步选择参数或预条件器。</p>
+            <p><b>为什么这样判断</b>Alioth 本来就有学习配置和传统备用配置；把选择条件从“失败后切换”扩展为“按预计总时间主动选择”，改动相对可控。</p>
+            <p class="next-step"><b>下一步</b>在同一组瞬态仿真中比较始终使用 Alioth、始终使用传统配置、失败后切换和在线主动选择四种策略。</p>
+          </article>
+          <article class="portfolio-card" data-direction-status="emerging">
+            <div class="portfolio-meta"><span>少量工作开始探索</span><span class="problem-pill">Q1</span><span class="problem-pill">Q4</span></div>
+            <h4>分阶段联合学习少数相互影响最大的组件</h4><p>P11 与 P17 说明接口、层间传递和粗层算子可以联合考虑，但同时学习所有组件会明显增加训练与验证难度。</p>
+            <p><b>为什么这样判断</b>Alioth 只学习平滑器，可能受固定粗化或层间传递限制；但直接学习整套求解器不符合轻量目标，因此更适合一次只增加一个组件。</p>
+            <p class="next-step"><b>下一步</b>先比较“仅学习平滑器”和“平滑器加一个粗层相关组件”，只有收益稳定且准备成本可控时才继续扩展。</p>
+          </article>
+          <article class="portfolio-card" data-direction-status="emerging">
+            <div class="portfolio-meta"><span>少量工作开始探索</span><span class="problem-pill">Q4</span><span class="problem-pill">Q5</span></div>
+            <h4>把已经稳定的网络规律压缩成可直接执行的公式</h4><p>P21 展示了训练阶段使用模型、部署阶段只执行符号公式的路线。</p>
+            <p><b>为什么这样判断</b>RowNet 很小且逐行输出，具备被近似成分段公式的条件；如果成功，可以进一步降低推理开销并改善可解释性。</p>
+            <p class="next-step"><b>下一步</b>先在训练分布外验证公式能否保留成功率；若长尾矩阵明显退化，就不应为了省下很小的推理时间而强行压缩。</p>
+          </article></section><section class="portfolio-group" data-project-fit="not-fit"><h3>不符合当前项目目标</h3>
+          <article class="portfolio-card" data-direction-status="existing">
+            <div class="portfolio-meta"><span>已有研究</span><span class="problem-pill">Q2</span><span class="problem-pill">Q5</span></div>
+            <h4>为每个新矩阵重新训练较大的图网络或神经算子</h4><p>P19 等路线可以提高单个问题上的表达能力，但需要按矩阵或方程族训练，并增加求解前成本。</p>
+            <p><b>为什么这样判断</b>这与 Alioth 希望一次训练后快速处理不同来源矩阵、并保持低准备成本的目标直接冲突。</p>
+            <p class="next-step"><b>下一步</b>除非项目以后明确转向长期重复求解同一矩阵，否则不建议把它作为主线；可保留为精度上限对照。</p>
+          </article>
+          <article class="portfolio-card" data-direction-status="existing">
+            <div class="portfolio-meta"><span>已有研究</span><span class="problem-pill">Q3</span><span class="problem-pill">Q4</span><span class="problem-pill">Q6</span></div>
+            <h4>让神经网络直接替代高精度线性求解过程</h4><p>端到端近似解可以很快，但很难同时给出严格残差、稳定跨来源泛化和明确失败处置。</p>
+            <p><b>为什么这样判断</b>Alioth 的核心选择正是让经典迭代保留最终精度控制；改成端到端替代会放弃当前最有价值的可靠性结构。</p>
+            <p class="next-step"><b>下一步</b>不建议作为项目主线；若使用，只适合生成初值或作为内部修正模块，而不是承担最终答案。</p>
+          </article></section></div></section>
+    <section class="section" id="project-positioning"><div class="section-head"><div class="section-no">07</div><div><div class="eyebrow">Project Positioning</div><h2>把 Alioth 放回地图</h2></div></div><div class="content"><div class="position-map">
+      <article class="position-step"><span>WHERE</span><h3>位于哪里</h3><p>Alioth 同时关注四件事：自动生成求解器组件、换到新矩阵后继续使用、由经典迭代保证最终精度，以及让主要计算适合 GPU。它最接近 R1，并使用灵活共轭梯度法完成最后的精确求解。</p></article><article class="position-step"><span>INHERIT</span><h3>继承什么</h3><p>它沿用了平滑聚合代数多重网格、多项式或 Jacobi 平滑、灵活共轭梯度法和残差停止准则，也继承了 P01、P03、P07 所代表的思想：学习一个关键组件，而不是让网络直接给出最终答案。</p></article><article class="position-step"><span>CHANGE</span><h3>改变什么</h3><p>公开 v0 把学习对象放在每一层、每一行的多项式平滑系数上，并用8个无量纲局部特征一次生成这些系数；传统迭代算法仍负责把误差继续压低。</p></article><article class="position-step"><span>SOLVE</span><h3>解决什么</h3><p>它试图同时解决三类困难：固定并行平滑器在新矩阵上可能不稳定，效果好的顺序平滑器难以充分利用 GPU，以及为每个新矩阵重新训练会增加准备成本。目前公开代码证明这种组合已经实现，但还不能证明这些困难都已被解决。</p></article><article class="position-step"><span>NEW</span><h3>新在哪里</h3><p>‘学习平滑器’本身已有 P05/P07；‘由经典迭代继续提高精度’也已有 P09/P14。更可能的新意，是用极小网络根据每一行矩阵的无量纲特征生成平滑系数，并把这种做法用于不同来源的矩阵。</p></article></div><div class="verdict"><b>当前最稳妥判断：</b>Alioth 目前更像一种有辨识度的新组合，而不是已经得到充分证实的新范式。它把局部、可并行的组件生成与经典迭代结合起来；若未来能在严格隔离的跨来源矩阵集上胜过认真优化的 GPU 基线，并完整报告所有时间开销和失败情况，这种组合才可能上升为更普遍的方法贡献。</div></div></section>
+    <section class="section" id="method-limitations"><div class="section-head"><div class="section-no">08</div><div><div class="eyebrow">Method & Limitations</div><h2>这张地图如何绘制，又遗漏了什么</h2></div></div><div class="content method-grid"><div><h3>检索方法</h3><p>先从 Alioth 的底层问题、学习对象与瓶颈分别检索，再以 ICML 2019、ICML 2020、NeurIPS 2021、ICML 2023、ICML 2024 和 NeurIPS 2025 等锚点沿引用链扩展；随后定向检查 ICML、ICLR、NeurIPS 与 SIAM SISC、JCP、CMAME、NMI、PRD、Computers &amp; Fluids、MLST、CPC 等领域权威 venue。核心集只保留官方 proceedings 或 publisher 页面可核验的正式论文/online-first 论文。</p><p><b>代表性查询：</b>learning multigrid prolongation coarsening smoother；learned preconditioner sparse SPD conjugate gradient；neural operator Krylov preconditioner correctness；GPU sparse approximate inverse learned preconditioner；online solver parameter selection repeated linear systems；limitations triangular solve setup cost OOD generalization</p><h3>未进入核心语料</h3><ul class="exclusion-list"><li><a href="https://arxiv.org/abs/2305.16368" target="_blank" rel="noreferrer">Neural Incomplete Factorization</a><span>高度相关，但本轮只核实到 arXiv 预印本，未作为正式发表核心论文。</span></li><li><a href="https://arxiv.org/abs/2312.11093" target="_blank" rel="noreferrer">MGCNN: a Learnable Multigrid Solver for Sparse Linear Systems from PDEs on Structured Grids</a><span>高度相关，但本轮未核实正式出版页面。</span></li><li><a href="https://arxiv.org/abs/2502.01337" target="_blank" rel="noreferrer">Neural Preconditioning Operator for Efficient PDE Solves</a><span>属于 emerging neural-operator preconditioner，当前核心集不把 arXiv-only 当已发表工作。</span></li><li><a href="https://www.sciencedirect.com/science/article/abs/pii/S0021999126005619" target="_blank" rel="noreferrer">Random Neural Basis Based Preconditioning Strategies for Solving Linear Systems of Equations</a><span>publisher 已给 DOI 和2026年11月卷期，但截至分析日处于未来 issue；列为 online publication candidate，待状态复核后进入核心。</span></li></ul></div><div><h3>限制</h3><ul><li>这是首轮 Research Landscape，不是系统综述；25篇核心集已覆盖主要范式，但可能遗漏刚上线的2026年论文。</li><li>对多数论文阅读到官方摘要和关键正文片段；只有在已读结果页/表格或 publisher 摘要明确给出时才保留具体数字。</li><li>未运行 Alioth、PyAMG、AmgX 或任何论文代码；所有性能均为作者报告。</li><li>没有获得 Alioth 训练代码、116矩阵冻结清单、逐实例日志、自适应层实现或完整论文，因此无法检验数据泄漏与基线公平性。</li><li>CCF-A 只用于计算机领域 venue 优先级；SISC、PRD、CMAME、Computers &amp; Fluids、CPC 等按其细分学科权威性纳入 Tier 2。</li><li>不同论文的 PDE、矩阵、容差、硬件、setup、RHS 数和失败定义不一致，页面不做跨论文数字排名。</li></ul><h3>来源清单</h3><ol class="source-list">
+      <li><a href="https://www.tianyuc.com/blog/alioth" target="_blank" rel="noreferrer">[S01] Alioth 项目博客</a><span>完整系统叙事与作者报告结果</span></li>
+      <li><a href="https://github.com/Tarpelite/alioth" target="_blank" rel="noreferrer">[S02] Alioth GitHub 仓库</a><span>公开版本范围、README 与权重</span></li>
+      <li><a href="https://github.com/Tarpelite/alioth/blob/main/alioth/solver.py" target="_blank" rel="noreferrer">[S03] Alioth solver.py</a><span>公开实现控制流</span></li>
+      <li><a href="https://proceedings.mlr.press/v97/greenfeld19a.html" target="_blank" rel="noreferrer">[S04] Greenfeld et al., ICML 2019</a><span>学习 multigrid prolongation</span></li>
+      <li><a href="https://www.sciencedirect.com/science/article/pii/S0377042719305291" target="_blank" rel="noreferrer">[S05] Katrutsa et al., JCAM 2020</a><span>可微优化 multigrid 参数</span></li>
+      <li><a href="https://proceedings.mlr.press/v119/luz20a.html" target="_blank" rel="noreferrer">[S06] Luz et al., ICML 2020</a><span>GNN 学习 AMG prolongation</span></li>
+      <li><a href="https://proceedings.neurips.cc/paper/2021/hash/6531b32f8d02fece98ff36a64a7c8260-Abstract.html" target="_blank" rel="noreferrer">[S07] Taghibakhshi et al., NeurIPS 2021</a><span>RL 学习 AMG coarsening</span></li>
+      <li><a href="https://www.sciencedirect.com/science/article/pii/S0045793022002213" target="_blank" rel="noreferrer">[S08] Weymouth, Computers &amp; Fluids 2022</a><span>CFD pressure projection learned smoother</span></li>
+      <li><a href="https://proceedings.neurips.cc/paper_files/paper/2022/hash/2f8928efe957139e9c0efc98f173f4be-Abstract-Conference.html" target="_blank" rel="noreferrer">[S09] Learning Interface Conditions, NeurIPS 2022</a><span>学习 DDM 接口</span></li>
+      <li><a href="https://epubs.siam.org/doi/10.1137/21M1430030" target="_blank" rel="noreferrer">[S10] Huang et al., SISC 2023</a><span>学习 optimal multigrid smoother</span></li>
+      <li><a href="https://epubs.siam.org/doi/10.1137/21M1433514" target="_blank" rel="noreferrer">[S11] Azulay &amp; Treister, SISC 2023</a><span>Helmholtz neural preconditioner</span></li>
+      <li><a href="https://proceedings.mlr.press/v202/li23e.html" target="_blank" rel="noreferrer">[S12] Li et al., ICML 2023</a><span>GNN 学习 PCG 因子</span></li>
+      <li><a href="https://proceedings.mlr.press/v202/kaneda23a.html" target="_blank" rel="noreferrer">[S13] Kaneda et al., ICML 2023</a><span>学习 conjugate direction</span></li>
+      <li><a href="https://proceedings.mlr.press/v202/taghibakhshi23a.html" target="_blank" rel="noreferrer">[S14] MG-GNN, ICML 2023</a><span>多层 DDM 参数联合学习</span></li>
+      <li><a href="https://journals.aps.org/prd/abstract/10.1103/PhysRevD.107.034508" target="_blank" rel="noreferrer">[S15] Calì et al., PRD 2023</a><span>Dirac neural preconditioner 与成本权衡</span></li>
+      <li><a href="https://proceedings.mlr.press/v235/han24a.html" target="_blank" rel="noreferrer">[S16] UGrid, ICML 2024</a><span>神经 multigrid 的收敛与正确性</span></li>
+      <li><a href="https://proceedings.mlr.press/v235/rudikov24a.html" target="_blank" rel="noreferrer">[S17] FCG-NO, ICML 2024</a><span>neural operator 作为 FCG preconditioner</span></li>
+      <li><a href="https://proceedings.iclr.cc/paper_files/paper/2024/hash/8fcc228e94aa7e4773a27c6c2d886243-Abstract-Conference.html" target="_blank" rel="noreferrer">[S18] Learning to Relax, ICLR 2024</a><span>bandit 在线 solver 调参</span></li>
+      <li><a href="https://epubs.siam.org/doi/full/10.1137/23M1583302" target="_blank" rel="noreferrer">[S19] Lerer et al., SISC 2024</a><span>implicit-layer Helmholtz preconditioner</span></li>
+      <li><a href="https://epubs.siam.org/doi/10.1137/23M1583533" target="_blank" rel="noreferrer">[S20] Huang et al., SISC 2024</a><span>学习降低 coarse operator complexity</span></li>
+      <li><a href="https://www.nature.com/articles/s42256-024-00910-x" target="_blank" rel="noreferrer">[S21] HINTS, Nature Machine Intelligence 2024</a><span>神经网络和传统迭代分别处理不同误差</span></li>
+      <li><a href="https://proceedings.iclr.cc/paper_files/paper/2025/hash/3bb7e33e4da1fd19ebc6f0899e45a9dc-Abstract-Conference.html" target="_blank" rel="noreferrer">[S22] Graph Neural Preconditioners, ICLR 2025</a><span>通用稀疏矩阵 nonlinear preconditioner</span></li>
+      <li><a href="https://proceedings.mlr.press/v267/wang25a.html" target="_blank" rel="noreferrer">[S23] Schwarz–Schur Involution, ICML 2025</a><span>不用机器学习的 GPU 直接求解对照方法</span></li>
+      <li><a href="https://proceedings.neurips.cc/paper_files/paper/2025/hash/5c17c18c1dea5a0c00907824bbb80449-Abstract-Conference.html" target="_blank" rel="noreferrer">[S24] SymMaP, NeurIPS 2025</a><span>符号 preconditioner 参数</span></li>
+      <li><a href="https://proceedings.neurips.cc/paper_files/paper/2025/hash/23fcc63005ac1a6e460ec4e209d17607-Abstract-Conference.html" target="_blank" rel="noreferrer">[S25] Learned SPAI, NeurIPS 2025</a><span>GPU-friendly learned approximate inverse</span></li>
+      <li><a href="https://doi.org/10.1088/2632-2153/ae76ba" target="_blank" rel="noreferrer">[S26] Sappl et al., MLST 2026</a><span>CNN-driven Cholesky-like preconditioner</span></li>
+      <li><a href="https://doi.org/10.1016/j.cma.2026.118989" target="_blank" rel="noreferrer">[S27] NOWS, CMAME 2026</a><span>neural operator warm start</span></li>
+      <li><a href="https://www.sciencedirect.com/science/article/pii/S0010465526002869" target="_blank" rel="noreferrer">[S28] PCGBandit, CPC 2026</a><span>OpenFOAM 内在线 preconditioner 选择</span></li></ol></div></div></section>
+  </main>
+  <footer><span>Research Cartographer · 项目内孵化样例 · 未独立复现实验</span><a class="deerflow" href="https://deerflow.tech" target="_blank" rel="noreferrer">Created By Deerflow</a></footer>
+  <script>
+    (()=>{const buttons=[...document.querySelectorAll('.filter')],cards=[...document.querySelectorAll('.paper-card')],search=document.querySelector('#paper-search'),count=document.querySelector('#paper-count');let active='all';function apply(){const q=search.value.trim().toLowerCase();let shown=0;cards.forEach(card=>{const ok=(active==='all'||card.dataset.relevance===active)&&(!q||card.dataset.search.includes(q));card.hidden=!ok;if(ok)shown++;});count.textContent=`显示 ${shown} / ${cards.length}`;}buttons.forEach(btn=>btn.addEventListener('click',()=>{buttons.forEach(x=>{x.classList.remove('active');x.setAttribute('aria-pressed','false')});btn.classList.add('active');btn.setAttribute('aria-pressed','true');active=btn.dataset.filter;apply();}));search.addEventListener('input',apply);})();
+  </script>
+</body></html>
